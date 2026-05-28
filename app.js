@@ -18,11 +18,135 @@ function formatCurrencyName(curr) {
   return flag ? `${flag} ${curr}` : curr;
 }
 
-// --- CARTIER CLOCK HANDS UPDATER ---
-function updateCartierClock() {
-  const hrHand = document.getElementById('cartier-hour-hand');
-  const minHand = document.getElementById('cartier-minute-hand');
-  const secHand = document.getElementById('cartier-second-hand');
+// --- DATA EXPORT HELPERS ---
+function exportToCSV(filename, headers, rows) {
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(val => {
+      let str = String(val === null || val === undefined ? '' : val);
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    }).join(','))
+  ].join('\n');
+  
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function exportToPDF(title, headers, rows) {
+  const printWindow = window.open('', '_blank', 'width=1000,height=800');
+  if (!printWindow) {
+    alert(state.activeLanguage === 'ar' ? 'يرجى السماح بفتح النوافذ المنبثقة لتتمكن من تصدير PDF.' : 'Please allow popups to export to PDF.');
+    return;
+  }
+  const isRtl = state.activeLanguage === 'ar';
+  const direction = isRtl ? 'rtl' : 'ltr';
+  const alignment = isRtl ? 'right' : 'left';
+  
+  const tableRows = rows.map(row => `
+    <tr>
+      ${row.map(cell => `<td>${cell}</td>`).join('')}
+    </tr>
+  `).join('');
+  
+  const tableHeaders = headers.map(h => `<th>${h}</th>`).join('');
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="${state.activeLanguage}" dir="${direction}">
+    <head>
+      <meta charset="UTF-8">
+      <title>${title}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap');
+        body {
+          font-family: 'Tajawal', sans-serif;
+          margin: 40px;
+          color: #2d2621;
+          direction: ${direction};
+          text-align: ${alignment};
+          background-color: #fff;
+        }
+        h2 {
+          color: #ae7c50;
+          border-bottom: 2px solid #ae7c50;
+          padding-bottom: 10px;
+          margin-bottom: 25px;
+          font-weight: 800;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 20px;
+          margin-bottom: 20px;
+        }
+        th, td {
+          border: 1px solid #e7dfd5;
+          padding: 12px;
+          text-align: ${alignment};
+          font-size: 0.9rem;
+        }
+        th {
+          background-color: #fcfbf9;
+          color: #8b5a2b;
+          font-weight: 700;
+        }
+        tr:nth-child(even) {
+          background-color: #fdfdfd;
+        }
+        .footer {
+          margin-top: 40px;
+          font-size: 0.8rem;
+          color: #8c857b;
+          text-align: center;
+          border-top: 1px solid #e7dfd5;
+          padding-top: 15px;
+        }
+      </style>
+    </head>
+    <body>
+      <h2>${title}</h2>
+      <table>
+        <thead>
+          <tr>
+            ${tableHeaders}
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+      <div class="footer">
+        ${state.activeLanguage === 'ar' ? 'أكويتي للحلول المالية - تقرير تلقائي مصاحب لموازنة العملة العكسية' : 'Equity Platform - Automated report generated under Sharia controls'}
+      </div>
+      <script>
+        window.onload = function() {
+          window.print();
+          setTimeout(function() { window.close(); }, 500);
+        }
+      </script>
+    </body>
+    </html>
+  `;
+  
+  printWindow.document.open();
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
+}
+
+// --- ROLEX CLOCK HANDS UPDATER ---
+function updateRolexClock() {
+  const hrHand = document.getElementById('rolex-hour-hand');
+  const minHand = document.getElementById('rolex-minute-hand');
+  const secHand = document.getElementById('rolex-second-hand');
+  const dateVal = document.getElementById('rolex-date-val');
   
   if (!hrHand || !minHand) return;
   
@@ -31,13 +155,17 @@ function updateCartierClock() {
   const mins = now.getMinutes();
   const hrs = now.getHours();
   
-  const secDeg = secs * 6; // 360 / 60
-  const minDeg = mins * 6 + secs * 0.1; // 360 / 60
-  const hrDeg = (hrs % 12) * 30 + mins * 0.5; // 360 / 12
+  const secDeg = secs * 6;
+  const minDeg = mins * 6 + secs * 0.1;
+  const hrDeg = (hrs % 12) * 30 + mins * 0.5;
   
   hrHand.style.transform = `rotate(${hrDeg}deg)`;
   minHand.style.transform = `rotate(${minDeg}deg)`;
   if (secHand) secHand.style.transform = `rotate(${secDeg}deg)`;
+  
+  if (dateVal) {
+    dateVal.innerText = now.getDate();
+  }
 }
 
 // --- TRANSLATION DICTIONARIES ---
@@ -58,6 +186,7 @@ const translations = {
     debtors: "عقود المشغلين (Outflows)",
     calculator: "الحاسبة وجدول السداد",
     ledgers: "دفتر الحسابات",
+    analysis: "التحليل المالي والتوصيات",
     
     // General Metrics
     totalCreditorCap: "إجمالي أموال الممولين",
@@ -170,6 +299,7 @@ const translations = {
     debtors: "Operator Contracts (Outflows)",
     calculator: "Calculator & Scheduler",
     ledgers: "Ledgers",
+    analysis: "Financial Analysis & Recommendations",
     
     // General Metrics
     totalCreditorCap: "Total Funder Capital",
@@ -1499,6 +1629,9 @@ function renderApp() {
     case 'ledgers':
       viewContainer.innerHTML = renderLedgersHTML();
       break;
+    case 'analysis':
+      viewContainer.innerHTML = renderAnalysisHTML();
+      break;
     case 'monthly_balance':
       viewContainer.innerHTML = renderMonthlyBalanceHTML();
       break;
@@ -1532,8 +1665,8 @@ function renderApp() {
   // Re-generate Lucide SVG icons dynamically
   lucide.createIcons();
   
-  // Update the analog Cartier clock immediately
-  updateCartierClock();
+  // Update the analog Rolex clock immediately
+  updateRolexClock();
 }
 
 // --- HTML GENERATORS ---
@@ -1573,6 +1706,12 @@ function renderSidebarHTML() {
           <a class="nav-link" data-tab="ledgers">
             <i data-lucide="book-open"></i>
             <span class="nav-text">${t.ledgers}</span>
+          </a>
+        </li>
+        <li class="nav-item ${activeTab === 'analysis' ? 'active' : ''}">
+          <a class="nav-link" data-tab="analysis">
+            <i data-lucide="trending-up"></i>
+            <span class="nav-text">${t.analysis}</span>
           </a>
         </li>
         <li class="nav-item ${activeTab === 'monthly_balance' ? 'active' : ''}">
@@ -1651,6 +1790,12 @@ function renderHeaderHTML() {
       titleStr = t.ledgerTitle;
       subStr = t.ledgerSubtitle;
       break;
+    case 'analysis':
+      titleStr = t.analysis;
+      subStr = state.activeLanguage === 'ar' 
+        ? "مؤشرات وتوصيات تصفية العقود وموازنة محفظة العملات" 
+        : "Exposure balancing, liquidation recommendations & financial insights";
+      break;
     case 'monthly_balance':
       titleStr = t.monthly_balance;
       subStr = state.activeLanguage === 'ar' 
@@ -1703,26 +1848,44 @@ function renderHeaderHTML() {
       <p>${subStr}</p>
     </div>
     <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
-      <!-- Cartier-inspired Analog Clock -->
-      <div class="cartier-clock" style="position: relative; width: 38px; height: 38px; border-radius: 50%; background: #fdfcf7; border: 2.2px solid #d4af37; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-inline-end: 4px;">
-        <div style="position: absolute; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle, #fcfbf6 60%, #f7f3e8 100%);"></div>
-        <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid rgba(139, 90, 43, 0.2);"></div>
+      <!-- Rolex Datejust 16233 Gold Fluted Bezel Analog Clock -->
+      <div class="rolex-clock" style="position: relative; width: 54px; height: 54px; border-radius: 50%; background: conic-gradient(from 0deg, #f2d479 0%, #bca052 4%, #d4af37 8%, #f2d479 12%, #bca052 16%, #d4af37 20%, #f2d479 24%, #bca052 28%, #d4af37 32%, #f2d479 36%, #bca052 40%, #d4af37 44%, #f2d479 48%, #bca052 52%, #d4af37 56%, #f2d479 60%, #bca052 64%, #d4af37 68%, #f2d479 72%, #bca052 76%, #d4af37 80%, #f2d479 84%, #bca052 88%, #d4af37 92%, #f2d479 96%, #bca052 100%); box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-inline-end: 8px;">
+        <!-- Dial Background (Emerald Green sunburst effect representing wealth and investment growth) -->
+        <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, #059669 0%, #064e3b 100%); box-shadow: inset 0 1px 3px rgba(0,0,0,0.45); border: 0.5px solid rgba(212, 175, 55, 0.35);"></div>
         
-        <!-- Roman numerals on Clock Face -->
-        <span style="position: absolute; top: 2px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">XII</span>
-        <span style="position: absolute; right: 3px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">III</span>
-        <span style="position: absolute; bottom: 2px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">VI</span>
-        <span style="position: absolute; left: 3px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">IX</span>
+        <!-- Rolex Crown Logo at 12 o'clock in Gold -->
+        <svg viewBox="0 0 24 24" style="position: absolute; top: 7.5px; width: 6.5px; height: 6.5px; fill: #d4af37; z-index: 10;">
+          <path d="M2 18h20v2H2zM3 17l2.5-9 3.5 5.5 3-10 3 10 3.5-5.5 2.5 9z"/>
+        </svg>
         
-        <!-- Blue steel Cartier Hands -->
-        <div id="cartier-hour-hand" style="position: absolute; width: 1.5px; height: 8px; background: #0f2d59; top: 11px; transform-origin: bottom center; transform: rotate(0deg); border-radius: 1px;"></div>
-        <div id="cartier-minute-hand" style="position: absolute; width: 1px; height: 12px; background: #0f2d59; top: 7px; transform-origin: bottom center; transform: rotate(0deg); border-radius: 0.5px;"></div>
-        <div id="cartier-second-hand" style="position: absolute; width: 0.5px; height: 13px; background: #c5a880; top: 6px; transform-origin: bottom center; transform: rotate(0deg);"></div>
+        <!-- Cyclops magnifying glass Date window at 3 o'clock -->
+        <div style="position: absolute; right: 5.5px; top: calc(50% - 5px); width: 9px; height: 10px; background: #fff; border: 0.8px solid #d4af37; border-radius: 1px; display: flex; align-items: center; justify-content: center; z-index: 8; box-shadow: 0 0.5px 1.5px rgba(0,0,0,0.3);">
+          <span id="rolex-date-val" style="font-family: var(--font-english); font-size: 6px; font-weight: 900; color: #000; line-height: 1;">28</span>
+        </div>
+        <!-- Cyclops Lens Overlay (magnifying glass reflection) -->
+        <div style="position: absolute; right: 4px; top: calc(50% - 6.5px); width: 12px; height: 13px; border-radius: 2px; background: rgba(255,255,255,0.4); backdrop-filter: blur(0.2px); border: 0.5px solid rgba(255,255,255,0.6); z-index: 9; pointer-events: none; box-shadow: inset 0 0.5px 1px rgba(255,255,255,0.8);"></div>
         
-        <!-- Center pin -->
-        <div style="position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #0f2d59; border: 0.5px solid #fff;"></div>
-        <!-- Sapphire Crown cabochon representation -->
-        <div style="position: absolute; right: -3px; top: calc(50% - 2px); width: 2px; height: 4px; background: #1d4ed8; border-radius: 1px; border: 0.5px solid #d4af37;"></div>
+        <!-- Luxury Hour Indices (Gold Batons) -->
+        <div style="position: absolute; width: 44px; height: 44px; z-index: 5; pointer-events: none;">
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(30deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(60deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(120deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(150deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(180deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(210deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(240deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(270deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(300deg); border-radius: 0.5px;"></div>
+          <div style="position: absolute; top: 1px; left: calc(50% - 1px); width: 2px; height: 5px; background: #d4af37; transform-origin: 1px 21px; transform: rotate(330deg); border-radius: 0.5px;"></div>
+        </div>
+
+        <!-- Gold Rolex Hands -->
+        <div id="rolex-hour-hand" style="position: absolute; width: 2px; height: 12px; background: #d4af37; top: 15px; left: 26px; transform-origin: bottom center; transform: rotate(0deg); border-radius: 1px; z-index: 11; box-shadow: 0 0.5px 1.5px rgba(0,0,0,0.3);"></div>
+        <div id="rolex-minute-hand" style="position: absolute; width: 1.5px; height: 17px; background: #d4af37; top: 10px; left: 26.25px; transform-origin: bottom center; transform: rotate(0deg); border-radius: 1px; z-index: 12; box-shadow: 0 0.5px 1.5px rgba(0,0,0,0.3);"></div>
+        <div id="rolex-second-hand" style="position: absolute; width: 0.8px; height: 19px; background: #d4af37; top: 8px; left: 26.6px; transform-origin: bottom center; transform: rotate(0deg); z-index: 13; border-radius: 0.5px;"></div>
+        
+        <!-- Center gold pin -->
+        <div style="position: absolute; width: 4.5px; height: 4.5px; border-radius: 50%; background: #d4af37; border: 0.5px solid #fff; z-index: 14; box-shadow: 0 0.5px 1.5px rgba(0,0,0,0.4);"></div>
       </div>
 
       <!-- Compact Language Toggles -->
@@ -2107,10 +2270,30 @@ function renderContractsHTML(contractType) {
             <i data-lucide="file-text" style="color: var(--color-gold)"></i>
             ${isCreditor ? t.funderContracts : t.operatorContracts}
           </h3>
-          <button class="btn btn-primary" id="btn-new-contract" style="padding: 8px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
-            <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i>
-            <span>${state.activeLanguage === 'ar' ? 'إبرام عقد جديد' : 'Conclude New Contract'}</span>
-          </button>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <div class="export-dropdown no-print">
+              <button class="btn btn-secondary btn-export-toggle" style="padding: 8px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="download" style="width: 16px; height: 16px; color: var(--color-gold);"></i>
+                <span>${state.activeLanguage === 'ar' ? 'تصدير البيانات' : 'Export Data'}</span>
+                <i data-lucide="chevron-down" style="width: 12px; height: 12px; opacity: 0.7;"></i>
+              </button>
+              <div class="export-dropdown-menu">
+                <button class="export-menu-item btn-export-contracts-pdf" data-contract-type="${contractType}">
+                  <i data-lucide="printer" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+                  <span>${state.activeLanguage === 'ar' ? 'تحميل PDF' : 'Download PDF'}</span>
+                </button>
+                <button class="export-menu-item btn-export-contracts-sheets" data-contract-type="${contractType}">
+                  <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; color: var(--color-success);"></i>
+                  <span>${state.activeLanguage === 'ar' ? 'تصدير Sheets' : 'Export Sheets'}</span>
+                </button>
+              </div>
+            </div>
+            
+            <button class="btn btn-primary" id="btn-new-contract" style="padding: 8px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i>
+              <span>${state.activeLanguage === 'ar' ? 'إبرام عقد جديد' : 'Conclude New Contract'}</span>
+            </button>
+          </div>
         </div>
         
         ${list.length > 0 ? `
@@ -2971,6 +3154,423 @@ function renderMonthlyBalanceHTML() {
     </div>
   `;
 }
+
+function calculateRedemptionProfit(contract) {
+  const isFunder = contract.type === 'creditor';
+  
+  // Calculate return amount (in return currency)
+  const returnAmount = convertContractCurrency(contract.principal, contract.principalCurrency, contract.returnCurrency, contract);
+  
+  // Current value of returnAmount in principalCurrency at current market rate
+  const currentValInPrincipal = convertCurrency(returnAmount, contract.returnCurrency, contract.principalCurrency);
+  
+  // Profit/Loss calculation in principal currency
+  const profit = isFunder
+    ? contract.principal - currentValInPrincipal
+    : currentValInPrincipal - contract.principal;
+    
+  // Convert profit to USD for uniform comparisons
+  const profitUSD = convertToUSD(profit, contract.principalCurrency);
+  
+  return {
+    profit,
+    profitUSD,
+    currency: contract.principalCurrency,
+    returnAmount,
+    currentValInPrincipal
+  };
+}
+
+function renderAnalysisHTML() {
+  const t = translations[state.activeLanguage];
+  const isAr = state.activeLanguage === 'ar';
+  
+  const activeContracts = state.contracts.filter(c => c.status !== 'completed');
+  const funderContracts = activeContracts.filter(c => c.type === 'creditor');
+  const operatorContracts = activeContracts.filter(c => c.type === 'debtor');
+  
+  // --- FINANCIAL EXPOSURE & HEDGING CALCULATIONS ---
+  let funderUSD = 0;
+  let operatorUSD = 0;
+  funderContracts.forEach(c => {
+    funderUSD += convertContractCurrency(c.principal, c.principalCurrency, 'USD', c);
+  });
+  operatorContracts.forEach(c => {
+    operatorUSD += convertContractCurrency(c.principal, c.principalCurrency, 'USD', c);
+  });
+  
+  const usdPrincipalRatio = funderUSD > 0 ? (operatorUSD / funderUSD) * 100 : 0;
+  
+  let funderMonthlyReturnsIQD = 0;
+  let operatorMonthlyReturnsIQD = 0;
+  funderContracts.forEach(c => {
+    const monthlyReturnVal = calculateMonthlyReturn(c);
+    funderMonthlyReturnsIQD += convertContractCurrency(monthlyReturnVal, c.returnCurrency, 'IQD', c);
+  });
+  operatorContracts.forEach(c => {
+    const monthlyReturnVal = calculateMonthlyReturn(c);
+    operatorMonthlyReturnsIQD += convertContractCurrency(monthlyReturnVal, c.returnCurrency, 'IQD', c);
+  });
+  
+  const iqdHedgingRatio = funderMonthlyReturnsIQD > 0 ? (operatorMonthlyReturnsIQD / funderMonthlyReturnsIQD) * 100 : 0;
+  
+  // Generate professional advisor recommendations
+  let principalAnalysisAr = '';
+  let principalAnalysisEn = '';
+  let principalRecommendationAr = '';
+  let principalRecommendationEn = '';
+  let principalStatusColor = ''; // css color
+  let principalStatusIcon = ''; // lucide icon name
+  
+  if (funderUSD === 0 && operatorUSD === 0) {
+    principalStatusColor = 'var(--text-secondary)';
+    principalStatusIcon = 'info';
+    principalAnalysisAr = 'لا توجد عقود نشطة حالياً لإجراء تحليل لمطابقة رأس المال الأساسي.';
+    principalAnalysisEn = 'No active contracts currently available to run a principal capital matching analysis.';
+    principalRecommendationAr = 'يرجى تسجيل عقود ممولين ومشغلين لتوليد توصيات التحوط الخاصة بالسيولة.';
+    principalRecommendationEn = 'Please register active funder and operator contracts to generate custom liquidity hedging recommendations.';
+  } else if (usdPrincipalRatio < 90) {
+    principalStatusColor = 'var(--color-warning)';
+    principalStatusIcon = 'alert-triangle';
+    principalAnalysisAr = `<strong>انكشاف السيولة المعطلة (Dormant Cash):</strong> نسبة تشغيل رأس المال الممول بلغت <strong>${usdPrincipalRatio.toFixed(1)}%</strong> فقط. تم توجيه رأس مال نشط قدره <strong>$${operatorUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong> للمشغلين من إجمالي <strong>$${funderUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong> مستلمة من الممولين. هذا يعني وجود سيولة نقدية كبيرة راكدة في الخزينة لا تحقق عوائد.`;
+    principalAnalysisEn = `<strong>Dormant Cash Exposure:</strong> The capital utilization ratio stands at only <strong>${usdPrincipalRatio.toFixed(1)}%</strong>. Active deployed operator capital is <strong>$${operatorUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong> out of <strong>$${funderUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong> in total funder commitments, pointing to high idle treasury cash.`;
+    principalRecommendationAr = `<strong>خطوات التحوط المقترحة:</strong> يُنصح بتسريع تغطية الفرص المتاحة وجلب مشغلين نشطين إضافيين لتشغيل النقد الفائض، أو تعليق قبول اشتراكات تمويلية جديدة مؤقتاً لتجنب تكلفة الفرصة الضائعة التي تقلل عوائد المنصة الكلية.`;
+    principalRecommendationEn = `<strong>Actionable Hedging Steps:</strong> We advise accelerating mudarabah allocations to new active operators to deploy idle cash. Alternatively, temporarily pause accepting new funder capital to avoid diluting overall platform yields.`;
+  } else if (usdPrincipalRatio > 105) {
+    principalStatusColor = 'var(--color-danger)';
+    principalStatusIcon = 'alert-octagon';
+    principalAnalysisAr = `<strong>مخاطرة تجاوز الحدود المعتمدة (Principal Over-Allocation):</strong> إجمالي التمويل النشط للمشغلين البالغ <strong>$${operatorUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong> يفوق رأس مال الممولين البالغ <strong>$${funderUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong> بنسبة <strong>${usdPrincipalRatio.toFixed(1)}%</strong>. هذا الفارق يتم تمويله حالياً من السيولة الخاصة بالمنصة أو عبر رافعة مالية طارئة.`;
+    principalAnalysisEn = `<strong>Principal Over-Allocation:</strong> Operator capital deployments total <strong>$${operatorUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong>, which exceeds funder commitments of <strong>$${funderUSD.toLocaleString(undefined, {maximumFractionDigits:0})} USD</strong> by <strong>${usdPrincipalRatio.toFixed(1)}%</strong>. The platform is self-funding this difference.`;
+    principalRecommendationAr = `<strong>خطوات التحوط المقترحة:</strong> يجب إطلاق جولات استثمارية عاجلة لجذب ممولين جدد لتمويل هذا العجز لتجنب تجميد أموال المنصة التشغيلية، ومواءمة التدفقات للحد من أخطار طلبات التصفية المفاجئة للمشغلين.`;
+    principalRecommendationEn = `<strong>Actionable Hedging Steps:</strong> We recommend launching immediate fundraising campaigns to attract new funder capital. This replaces platform-funded capital with external funder liabilities, safeguarding platform liquidity.`;
+  } else {
+    principalStatusColor = 'var(--color-success)';
+    principalStatusIcon = 'check-circle';
+    principalAnalysisAr = `<strong>تطابق هيكلي مثالي:</strong> نسبة تشغيل النقد بلغت <strong>${usdPrincipalRatio.toFixed(1)}%</strong> وهي في النطاق النموذجي الآمن. يوجد موازنة تامة بين الالتزامات المستلمة ومصارف تشغيلها، مما يمنع تعطل السيولة ويحافظ على استدامة العوائد.`;
+    principalAnalysisEn = `<strong>Optimal Principal Alignment:</strong> The capital utilization ratio is at a healthy <strong>${usdPrincipalRatio.toFixed(1)}%</strong>. Received capital is closely matched with active operator deployments, minimizing yield drag and keeping operations optimized.`;
+    principalRecommendationAr = `<strong>خطوات التحوط المقترحة:</strong> الاستمرار في السياسة الحالية مع المحافظة على هامش سيولة احتياطية بمعدل 5% لمواجهة أي طلبات تصفية طارئة دون التسبب في خلل بالتدفقات التشغيلية.`;
+    principalRecommendationEn = `<strong>Actionable Hedging Steps:</strong> Maintain the current deployment run-rate. Keep a 5% liquid cash reserve on standby to settle emergency contract redemptions without disrupting ongoing operations.`;
+  }
+  
+  if (funderMonthlyReturnsIQD === 0 && operatorMonthlyReturnsIQD === 0) {
+    iqdStatusColor = 'var(--text-secondary)';
+    iqdStatusIcon = 'info';
+    iqdAnalysisAr = 'لا توجد دفعات أرباح نشطة حالياً لإجراء تحليل التحوط النقدي للدينار.';
+    iqdAnalysisEn = 'No active dividend payments currently available to analyze currency exchange hedging.';
+    iqdRecommendationAr = 'يرجى تسجيل وتفعيل العقود الاستثمارية لتفعيل مؤشرات التحوط النقدي.';
+    iqdRecommendationEn = 'Please record and activate contracts to trigger real-time exchange rate hedging indices.';
+  } else if (iqdHedgingRatio < 95) {
+    iqdStatusColor = 'var(--color-danger)';
+    iqdStatusIcon = 'alert-octagon';
+    iqdAnalysisAr = `<strong>عجز صرف الدينار العراقي (FX Deficit Exposure):</strong> عوائد الدينار الواردة من المشغلين <strong>(${operatorMonthlyReturnsIQD.toLocaleString(undefined, {maximumFractionDigits:0})} IQD)</strong> تغطي فقط <strong>${iqdHedgingRatio.toFixed(1)}%</strong> من التزامات توزيع الأرباح للممولين <strong>(${funderMonthlyReturnsIQD.toLocaleString(undefined, {maximumFractionDigits:0})} IQD)</strong>. المنصة مضطرة لشراء الدينار شهرياً بسعر الصرف الموازي لتسديد عجز الممولين، مما يعرضها لمخاطر خسائر فروق الصرف الكبيرة.`;
+    iqdAnalysisEn = `<strong>FX Deficit Exposure:</strong> Incoming returns in IQD from operators <strong>(${operatorMonthlyReturnsIQD.toLocaleString(undefined, {maximumFractionDigits:0})} IQD)</strong> cover only <strong>${iqdHedgingRatio.toFixed(1)}%</strong> of monthly payouts to funders <strong>(${funderMonthlyReturnsIQD.toLocaleString(undefined, {maximumFractionDigits:0})} IQD)</strong>. This forces the platform to purchase IQD from the open market, risking exchange losses.`;
+    iqdRecommendationAr = `<strong>خطوات التحوط المقترحة:</strong> يُنصح بتعديل شروط عقود المشغلين الجدد لزيادة الدفعات النقدية بالدينار، أو الاتفاق مع بعض الممولين الكبار لتحويل استلام عوائدهم إلى الدولار بدلاً من الدينار، لتقليص الانكشاف الصرفي الفوري.`;
+    iqdRecommendationEn = `<strong>Actionable Hedging Steps:</strong> We strongly advise structuring future operator contracts with higher IQD returns, or negotiating with key funders to transition their monthly payouts to USD to shrink the net currency deficit.`;
+  } else if (iqdHedgingRatio > 105) {
+    iqdStatusColor = 'var(--color-success)';
+    iqdStatusIcon = 'check-circle';
+    iqdAnalysisAr = `<strong>فائض تدفقات الدينار العراقي (IQD Cashflow Surplus):</strong> عوائد الدينار الواردة من المشغلين تفوق متطلبات الصرف للممولين بنسبة بلغت <strong>${iqdHedgingRatio.toFixed(1)}%</strong> (صافي فائض بقيمة <strong>${(operatorMonthlyReturnsIQD - funderMonthlyReturnsIQD).toLocaleString(undefined, {maximumFractionDigits:0})} IQD</strong> شهرياً). هذا يمنح المنصة حماية ومصداً كبيراً ضد تذبذبات السوق.`;
+    iqdAnalysisEn = `<strong>IQD Cashflow Surplus:</strong> Incoming IQD returns exceed funder liabilities by <strong>${iqdHedgingRatio.toFixed(1)}%</strong> (net surplus of <strong>${(operatorMonthlyReturnsIQD - funderMonthlyReturnsIQD).toLocaleString(undefined, {maximumFractionDigits:0})} IQD</strong>). This creates an excellent buffer against local currency fluctuations.`;
+    iqdRecommendationAr = `<strong>خطوات التحوط المقترحة:</strong> يُنصح بشدة بتحويل الفائض الشهري من الدينار العراقي فوراً إلى دولار أمريكي لحماية القيمة الشرائية وحفظ المكاسب من مخاطر التضخم وانخفاض قيمة العملة المحلية.`;
+    iqdRecommendationEn = `<strong>Actionable Hedging Steps:</strong> We recommend converting the excess monthly IQD returns into USD assets immediately at prevailing rates to protect accumulated reserves from purchasing power erosion or local currency depreciation.`;
+  } else {
+    iqdStatusColor = 'var(--color-success)';
+    iqdStatusIcon = 'check-circle';
+    iqdAnalysisAr = `<strong>تحوط نقدي متوازن:</strong> نسبة تحوط التدفقات الشهرية تبلغ <strong>${iqdHedgingRatio.toFixed(1)}%</strong> وهي نسبة ممتازة ومثالية. التدفقات الخارجة والداخلة بالدينار متطابقة مما يقلل تماماً الحاجة لشراء أو بيع العملة من السوق الموازي ويحقق استقراراً صرفياً شاملاً للمنصة.`;
+    iqdAnalysisEn = `<strong>Balanced Currency Hedging:</strong> Monthly cashflow hedging stands at <strong>${iqdHedgingRatio.toFixed(1)}%</strong>. This indicates an optimal match where incoming IQD returns offset outgoing funder distributions perfectly, neutralizing FX volatility.`;
+    iqdRecommendationAr = `<strong>خطوات التحوط المقترحة:</strong> الاستمرار في السياسة التشغيلية المتوازنة الحالية ومراقبة سعر الصرف الموازي عن كثب للكشف المبكر عن أي انحرافات تدعو لتحديث نسب التحوط.`;
+    iqdRecommendationEn = `<strong>Actionable Hedging Steps:</strong> Continue current operations. Regularly track official and parallel exchange rate indices to detect any emerging deviations early.`;
+  }
+
+  const generateRows = (list, emptyMsg) => {
+    if (list.length === 0) {
+      return `
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 30px;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">
+              <i data-lucide="info"></i>
+            </div>
+            <div>${emptyMsg}</div>
+          </td>
+        </tr>
+      `;
+    }
+    
+    return list.map(c => {
+      const isFunder = c.type === 'creditor';
+      const contractRate = c.customExchangeRate || 1.0;
+      const currentRate = (c.returnCurrency === 'IQD' || c.principalCurrency === 'IQD')
+        ? (state.exchangeRates['IQD'] || 1450.0)
+        : 1.0;
+        
+      const analysis = calculateRedemptionProfit(c);
+      const profitUSD = analysis.profitUSD;
+      const profit = analysis.profit;
+      
+      const isProfit = profitUSD > 0.01;
+      const profitColor = isProfit ? 'var(--color-success)' : 'var(--color-danger)';
+      const profitSign = isProfit ? '+' : '';
+      
+      const profitText = `${profitSign}${profit.toLocaleString(undefined, {maximumFractionDigits: 2})} ${formatCurrencyName(c.principalCurrency)} (${profitSign}$${profitUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD)`;
+      
+      let recText = '';
+      let badgeClass = '';
+      let recIcon = '';
+      
+      if (isProfit) {
+        recText = isFunder
+          ? (isAr ? 'ينصح بالإعادة الآن (أرباح صرف)' : 'Return capital now (arbitrage gain)')
+          : (isAr ? 'ينصح بالاسترداد الآن (أرباح صرف)' : 'Recover capital now (arbitrage gain)');
+        badgeClass = 'badge-success';
+        recIcon = 'check-circle';
+      } else {
+        recText = isAr 
+          ? 'ينصح بالانتظار (تجنب تصفية الخسارة)' 
+          : 'Keep active (avoid arbitrage loss)';
+        badgeClass = 'badge-warning';
+        recIcon = 'alert-circle';
+      }
+      
+      return `
+        <tr>
+          <td style="font-weight: 700; color: var(--text-primary);">${c.partyName}</td>
+          <td style="font-family: var(--font-english); font-weight: 600;">
+            ${c.principal.toLocaleString()} ${formatCurrencyName(c.principalCurrency)}
+          </td>
+          <td style="font-family: var(--font-english);">
+            1 USD = ${contractRate.toLocaleString()} ${c.returnCurrency === 'USD' ? c.principalCurrency : c.returnCurrency}
+          </td>
+          <td style="font-family: var(--font-english);">
+            1 USD = ${currentRate.toLocaleString()} ${c.returnCurrency === 'USD' ? c.principalCurrency : c.returnCurrency}
+          </td>
+          <td style="font-family: var(--font-english); font-weight: 600; color: var(--color-gold);">
+            ${analysis.returnAmount.toLocaleString(undefined, {maximumFractionDigits: 2})} ${formatCurrencyName(c.returnCurrency)}
+          </td>
+          <td style="font-family: var(--font-english); font-weight: bold; color: ${profitColor};">
+            ${profitText}
+          </td>
+          <td>
+            <span class="badge ${badgeClass}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px;">
+              <i data-lucide="${recIcon}" style="width: 12px; height: 12px;"></i>
+              <span>${recText}</span>
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  };
+  
+  const headersHtml = `
+    <thead>
+      <tr>
+        <th>${isAr ? 'الطرف الثاني' : 'Counterparty'}</th>
+        <th>${isAr ? 'رأس المال الأساسي' : 'Starting Principal'}</th>
+        <th>${isAr ? 'سعر صرف التعاقد' : 'Contract Rate'}</th>
+        <th>${isAr ? 'سعر الصرف الحالي' : 'Current Market Rate'}</th>
+        <th>${isAr ? 'مبلغ التصفية (عكسي)' : 'Redemption Payoff'}</th>
+        <th>${isAr ? 'صافي الربح/الخسارة التقريبي' : 'Approx. Net Profit'}</th>
+        <th>${isAr ? 'التوصية' : 'Recommendation'}</th>
+      </tr>
+    </thead>
+  `;
+
+  return `
+    <div class="analysis-view" style="animation: fadeIn 0.3s ease-in-out;">
+      
+      <!-- Currency Exposure & Hedging Dashboard -->
+      <div class="dashboard-grid" style="margin-bottom: 25px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+        
+        <!-- Card 1: Profitable Liquidations -->
+        <div class="premium-card stat-card info" style="background: linear-gradient(135deg, rgba(6, 78, 59, 0.15) 0%, rgba(5, 150, 105, 0.02) 100%); border-color: rgba(5, 150, 105, 0.2); height: auto;">
+          <div class="stat-header" style="margin-bottom: 12px;">
+            <span class="stat-title" style="font-weight: 600; color: var(--text-primary);">${isAr ? 'تصفية العقود الرابحة' : 'Profitable Arbitrage Liquidations'}</span>
+            <div class="stat-icon"><i data-lucide="trending-up" style="color: var(--color-success)"></i></div>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" style="font-size: 1.8rem; color: var(--color-success); font-family: var(--font-english); font-weight: 800; line-height: 1;">
+              ${activeContracts.filter(c => calculateRedemptionProfit(c).profitUSD > 0.01).length}
+            </div>
+            <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 8px;">
+              ${isAr ? 'عدد العقود التي تحقق أرباح فروقات صرف حالياً عند التصفية العكسية' : 'Active contracts yielding positive currency redemption arbitrage'}
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: USD Principal Matching Ratio -->
+        <div class="premium-card stat-card" style="background: linear-gradient(135deg, rgba(139, 90, 43, 0.1) 0%, rgba(139, 90, 43, 0.02) 100%); border-color: var(--color-gold-glow); height: auto;">
+          <div class="stat-header" style="margin-bottom: 12px;">
+            <span class="stat-title" style="font-weight: 600; color: var(--text-primary);">${isAr ? 'تطابق رأس المال الأساسي (USD)' : 'USD Principal Match'}</span>
+            <div class="stat-icon"><i data-lucide="coins" style="color: var(--color-gold)"></i></div>
+          </div>
+          <div class="stat-body">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div class="stat-value" style="font-size: 1.8rem; color: var(--color-gold); font-family: var(--font-english); font-weight: 800; line-height: 1;">
+                ${usdPrincipalRatio.toFixed(1)}%
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary); font-family: var(--font-english);">
+                $${operatorUSD.toLocaleString(undefined, {maximumFractionDigits:0})} / $${funderUSD.toLocaleString(undefined, {maximumFractionDigits:0})}
+              </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px; margin-top: 10px; overflow: hidden; border: 1px solid var(--border-color);">
+              <div style="background: linear-gradient(90deg, var(--color-gold) 0%, ${usdPrincipalRatio > 105 ? 'var(--color-danger)' : (usdPrincipalRatio < 90 ? 'var(--color-warning)' : 'var(--color-success)')} 100%); width: ${Math.min(usdPrincipalRatio, 100)}%; height: 100%; border-radius: 4px;"></div>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 8px;">
+              ${isAr ? 'رأس مال المشغلين مقارنةً بالممولين النشطين بالدولار' : 'Ratio of active deployed operator USD to received funder USD'}
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: IQD Cashflow Hedging Ratio -->
+        <div class="premium-card stat-card" style="background: linear-gradient(135deg, rgba(5, 150, 105, 0.1) 0%, rgba(5, 150, 105, 0.02) 100%); border-color: rgba(5, 150, 105, 0.15); height: auto;">
+          <div class="stat-header" style="margin-bottom: 12px;">
+            <span class="stat-title" style="font-weight: 600; color: var(--text-primary);">${isAr ? 'تحوط عوائد الدينار (IQD)' : 'IQD Return Cashflow Hedging'}</span>
+            <div class="stat-icon"><i data-lucide="shield-check" style="color: var(--color-success)"></i></div>
+          </div>
+          <div class="stat-body">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div class="stat-value" style="font-size: 1.8rem; color: var(--color-success); font-family: var(--font-english); font-weight: 800; line-height: 1;">
+                ${iqdHedgingRatio.toFixed(1)}%
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-english);">
+                ${(operatorMonthlyReturnsIQD/1000).toLocaleString(undefined, {maximumFractionDigits:0})}k / ${(funderMonthlyReturnsIQD/1000).toLocaleString(undefined, {maximumFractionDigits:0})}k
+              </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px; margin-top: 10px; overflow: hidden; border: 1px solid var(--border-color);">
+              <div style="background: linear-gradient(90deg, var(--color-gold) 0%, ${iqdHedgingRatio < 95 ? 'var(--color-danger)' : 'var(--color-success)'} 100%); width: ${Math.min(iqdHedgingRatio, 100)}%; height: 100%; border-radius: 4px;"></div>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 8px;">
+              ${isAr ? 'عائد المشغلين الوارد مقابل التزامات الممولين بالدينار' : 'Incoming operator returns vs outgoing funder liabilities in IQD'}
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Professional Advisory Report -->
+      <div class="premium-card" style="margin-bottom: 25px; border: 1px dashed var(--color-gold); background: rgba(139, 90, 43, 0.03); box-shadow: 0 4px 20px rgba(139, 90, 43, 0.05);">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(139, 90, 43, 0.15); padding-bottom: 10px;">
+          <i data-lucide="briefcase" style="color: var(--color-gold); width: 20px; height: 20px;"></i>
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--color-gold); margin: 0; display: flex; align-items: center; gap: 8px; justify-content: space-between; width: 100%;">
+            <span>${isAr ? 'تقرير استشاري مالي متخصص: انكشاف العملات والتحوط' : 'Professional Advisory Report: FX Exposure & Hedging'}</span>
+            <span style="font-size: 0.75rem; font-weight: 400; opacity: 0.8; font-family: var(--font-english); border: 1px solid var(--color-gold); padding: 2px 6px; border-radius: 4px;">OFFICIAL REPORT</span>
+          </h3>
+        </div>
+        
+        <div class="advisory-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+          <!-- USD Principal Alignment -->
+          <div style="padding: 10px; border-inline-start: 3px solid ${principalStatusColor}; background: rgba(255,255,255,0.01); border-radius: 0 4px 4px 0;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <i data-lucide="${principalStatusIcon}" style="color: ${principalStatusColor}; width: 16px; height: 16px;"></i>
+              <span style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem;">
+                ${isAr ? 'محاذاة رأس المال بالدولار (USD Principal)' : 'USD Principal Capital Alignment'}
+              </span>
+            </div>
+            <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-secondary); margin-bottom: 8px;">
+              ${isAr ? principalAnalysisAr : principalAnalysisEn}
+            </div>
+            <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-primary); font-weight: 600; border-top: 1px solid var(--border-color); padding-top: 6px;">
+              <span style="color: var(--color-gold);">${isAr ? 'توجيه التحوط:' : 'Hedging Action:'}</span>
+              ${isAr ? principalRecommendationAr : principalRecommendationEn}
+            </div>
+          </div>
+          
+          <!-- IQD Return Cashflow Hedging -->
+          <div style="padding: 10px; border-inline-start: 3px solid ${iqdStatusColor}; background: rgba(255,255,255,0.01); border-radius: 0 4px 4px 0;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <i data-lucide="${iqdStatusIcon}" style="color: ${iqdStatusColor}; width: 16px; height: 16px;"></i>
+              <span style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem;">
+                ${isAr ? 'تحوط تدفقات عوائد الدينار (IQD Cashflow)' : 'IQD Cashflow Return Hedging'}
+              </span>
+            </div>
+            <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-secondary); margin-bottom: 8px;">
+              ${isAr ? iqdAnalysisAr : iqdAnalysisEn}
+            </div>
+            <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-primary); font-weight: 600; border-top: 1px solid var(--border-color); padding-top: 6px;">
+              <span style="color: var(--color-gold);">${isAr ? 'توجيه التحوط:' : 'Hedging Action:'}</span>
+              ${isAr ? iqdRecommendationAr : iqdRecommendationEn}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Funder Contracts Section -->
+      <div class="premium-card" style="margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="arrow-down-left" style="color: var(--color-success)"></i>
+            <span>${isAr ? 'تصفية عقود الممولين (دائن)' : 'Funder Contracts Redemption Analyzer'}</span>
+          </h3>
+          
+          <div class="export-dropdown no-print">
+            <button class="btn btn-secondary btn-export-toggle" style="padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="download" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+              <span>${isAr ? 'تصدير البيانات' : 'Export Data'}</span>
+              <i data-lucide="chevron-down" style="width: 12px; height: 12px; opacity: 0.7;"></i>
+            </button>
+            <div class="export-dropdown-menu">
+              <button class="export-menu-item btn-export-analysis-pdf" data-contract-type="creditor">
+                <i data-lucide="printer" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+                <span>${isAr ? 'تحميل PDF' : 'Download PDF'}</span>
+              </button>
+              <button class="export-menu-item btn-export-analysis-sheets" data-contract-type="creditor">
+                <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; color: var(--color-success);"></i>
+                <span>${isAr ? 'تصدير Sheets' : 'Export Sheets'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="table-container">
+          <table class="premium-table">
+            ${headersHtml}
+            <tbody>
+              ${generateRows(funderContracts, isAr ? 'لا توجد عقود ممولين نشطة حالياً لإجراء التحليل المالي.' : 'No active funder contracts for analysis.')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Operator Contracts Section -->
+      <div class="premium-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="arrow-up-right" style="color: var(--color-danger)"></i>
+            <span>${isAr ? 'تصفية عقود المشغلين (مدين)' : 'Operator Contracts Redemption Analyzer'}</span>
+          </h3>
+          
+          <div class="export-dropdown no-print">
+            <button class="btn btn-secondary btn-export-toggle" style="padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="download" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+              <span>${isAr ? 'تصدير البيانات' : 'Export Data'}</span>
+              <i data-lucide="chevron-down" style="width: 12px; height: 12px; opacity: 0.7;"></i>
+            </button>
+            <div class="export-dropdown-menu">
+              <button class="export-menu-item btn-export-analysis-pdf" data-contract-type="debtor">
+                <i data-lucide="printer" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+                <span>${isAr ? 'تحميل PDF' : 'Download PDF'}</span>
+              </button>
+              <button class="export-menu-item btn-export-analysis-sheets" data-contract-type="debtor">
+                <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; color: var(--color-success);"></i>
+                <span>${isAr ? 'تصدير Sheets' : 'Export Sheets'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="table-container">
+          <table class="premium-table">
+            ${headersHtml}
+            <tbody>
+              ${generateRows(operatorContracts, isAr ? 'لا توجد عقود مشغلين نشطة حالياً لإجراء التحليل المالي.' : 'No active operator contracts for analysis.')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+    </div>
+  `;
+}
+
 function renderAccountStatement(accountId) {
   const t = translations[state.activeLanguage];
   const panel = document.getElementById('ledger-statement-panel');
@@ -3252,10 +3852,23 @@ function renderAccountStatement(accountId) {
         ${accountName}
       </h3>
       <div style="display: flex; gap: 10px; align-items: center;">
-        <button class="btn btn-secondary btn-print-statement no-print" style="padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
-          <i data-lucide="printer" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
-          <span>طباعة الكشف</span>
-        </button>
+        <div class="export-dropdown no-print">
+          <button class="btn btn-secondary btn-export-toggle" style="padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="download" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+            <span>${state.activeLanguage === 'ar' ? 'تصدير الكشف' : 'Export Statement'}</span>
+            <i data-lucide="chevron-down" style="width: 12px; height: 12px; opacity: 0.7;"></i>
+          </button>
+          <div class="export-dropdown-menu">
+            <button class="export-menu-item btn-export-statement-pdf" data-account-id="${accountId}">
+              <i data-lucide="printer" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+              <span>${state.activeLanguage === 'ar' ? 'تحميل PDF' : 'Download PDF'}</span>
+            </button>
+            <button class="export-menu-item btn-export-statement-sheets" data-account-id="${accountId}">
+              <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; color: var(--color-success);"></i>
+              <span>${state.activeLanguage === 'ar' ? 'تصدير Sheets' : 'Export Sheets'}</span>
+            </button>
+          </div>
+        </div>
         <button class="btn btn-secondary btn-undo-last no-print" style="padding: 6px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
           <i data-lucide="rotate-ccw" style="width: 14px; height: 14px; color: var(--color-warning);"></i>
           <span>تراجع عن آخر حركة</span>
@@ -4298,6 +4911,297 @@ function setupEventListeners() {
       }
     });
   }
+
+  // --- EXPORT DROPDOWNS SETUP ---
+  // Toggle dropdown on button click
+  document.querySelectorAll('.btn-export-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const parent = btn.parentElement;
+      const menu = parent.querySelector('.export-dropdown-menu');
+      if (menu) {
+        const isOpen = menu.style.display === 'block';
+        // Close all dropdowns
+        document.querySelectorAll('.export-dropdown-menu').forEach(m => m.style.display = 'none');
+        menu.style.display = isOpen ? 'none' : 'block';
+      }
+    });
+  });
+
+  // Close dropdowns when clicking anywhere outside
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.export-dropdown-menu').forEach(m => m.style.display = 'none');
+  });
+
+  // Export Contracts PDF click handler
+  document.querySelectorAll('.btn-export-contracts-pdf').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const type = btn.getAttribute('data-contract-type');
+      const isCreditor = type === 'creditor';
+      const list = state.contracts.filter(c => c.type === type);
+      
+      const t = translations[state.activeLanguage];
+      const isAr = state.activeLanguage === 'ar';
+      const title = isCreditor ? 
+        (isAr ? 'عقود الممولين (الدائنين)' : 'Funder Contracts') : 
+        (isAr ? 'عقود المشغلين (المدينين)' : 'Operator Contracts');
+      
+      const headers = isAr ? 
+        ["الطرف الثاني", "رأس المال", "عملة العائد", "طريقة الأرباح", "معدل الأرباح/المبلغ", "المدة", "الحالة", "تاريخ البدء"] :
+        ["Counterparty", "Principal", "Return Currency", "Dividend Type", "Rate/Amount", "Duration", "Status", "Start Date"];
+      
+      const rows = list.map(c => {
+        const isFixed = c.dividendType === 'fixed';
+        const rateOrAmountText = isFixed ? 
+          `${c.monthlyDividendAmount.toLocaleString()} ${formatCurrencyName(c.returnCurrency)}` : 
+          `%${c.dividendRate}`;
+        const divTypeLabel = isFixed ? 
+          (isAr ? 'مبلغ ثابت' : 'Fixed Amount') : 
+          (isAr ? 'نسبة مئوية' : 'Percentage');
+        
+        return [
+          c.partyName,
+          `${c.principal.toLocaleString()} ${c.principalCurrency}`,
+          c.returnCurrency,
+          divTypeLabel,
+          rateOrAmountText,
+          `${c.duration} ${isAr ? 'أشهر' : 'Months'}`,
+          c.status === 'completed' ? (isAr ? 'مكتمل' : 'Completed') : (isAr ? 'نشط' : 'Active'),
+          c.startDate
+        ];
+      });
+      
+      exportToPDF(title, headers, rows);
+    });
+  });
+
+  // Export Contracts Sheets click handler
+  document.querySelectorAll('.btn-export-contracts-sheets').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const type = btn.getAttribute('data-contract-type');
+      const isCreditor = type === 'creditor';
+      const list = state.contracts.filter(c => c.type === type);
+      
+      const isAr = state.activeLanguage === 'ar';
+      const filename = isCreditor ? 'funder_contracts.csv' : 'operator_contracts.csv';
+      
+      const headers = isAr ? 
+        ["الطرف الثاني", "رأس المال", "عملة رأس المال", "عملة العائد", "طريقة الأرباح", "معدل الأرباح/المبلغ", "المدة بالشهور", "الحالة", "تاريخ البدء"] :
+        ["Counterparty", "Principal", "Principal Currency", "Return Currency", "Dividend Type", "Rate or Amount", "Duration Months", "Status", "Start Date"];
+      
+      const rows = list.map(c => {
+        const isFixed = c.dividendType === 'fixed';
+        const rateOrAmountText = isFixed ? c.monthlyDividendAmount : c.dividendRate;
+        const divTypeLabel = isFixed ? 'fixed' : 'rate';
+        
+        return [
+          c.partyName,
+          c.principal,
+          c.principalCurrency,
+          c.returnCurrency,
+          divTypeLabel,
+          rateOrAmountText,
+          c.duration,
+          c.status,
+          c.startDate
+        ];
+      });
+      
+      exportToCSV(filename, headers, rows);
+    });
+  });
+
+  // Export Statement PDF click handler
+  document.querySelectorAll('.btn-export-statement-pdf').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.body.classList.add('printing-statement');
+      window.print();
+      document.body.classList.remove('printing-statement');
+    });
+  });
+
+  // Export Statement Sheets click handler
+  document.querySelectorAll('.btn-export-statement-sheets').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const accountId = btn.getAttribute('data-account-id');
+      const isAr = state.activeLanguage === 'ar';
+      
+      let accountName = '';
+      let txList = [];
+      const isPartyView = accountId.startsWith('party:');
+      
+      if (isPartyView) {
+        const partyName = accountId.substring(6);
+        const partyContracts = state.contracts.filter(c => c.partyName.trim() === partyName.trim());
+        accountName = partyName;
+        const contractIds = partyContracts.map(c => c.id);
+        txList = state.transactions.filter(t => contractIds.includes(t.contractId));
+      } else if (accountId === 'platform_profits') {
+        accountName = isAr ? 'أرباح المنصة الصافية' : 'Platform Net Profits';
+        txList = state.transactions.filter(t => t.contractId === 'platform_profits');
+      } else {
+        const contract = state.contracts.find(c => c.id === accountId);
+        accountName = contract ? contract.partyName : accountId;
+        txList = state.transactions.filter(t => t.contractId === accountId);
+      }
+      
+      txList.sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      const startDate = statementDateFilters.startDate;
+      const endDate = statementDateFilters.endDate;
+      const filtered = txList.filter(tx => {
+        const isBeforeStart = startDate && tx.date < startDate;
+        const isAfterEnd = endDate && tx.date > endDate;
+        return !isBeforeStart && !isAfterEnd;
+      });
+      
+      const filename = `statement_${accountName.replace(/\s+/g, '_')}.csv`;
+      
+      const headers = isAr ? 
+        ["التاريخ", "الحركة / البيان", "العملة", "مدين (Debit / خارج)", "دائن (Credit / داخل)", "الرصيد الجاري"] :
+        ["Date", "Description", "Currency", "Debit", "Credit", "Running Balance"];
+      
+      let runningBal = 0;
+      const rows = filtered.map(tx => {
+        const isDebit = tx.type === 'payout' || tx.type === 'collect' || tx.type === 'withdrawal';
+        const debitVal = isDebit ? tx.amount : 0;
+        const creditVal = !isDebit ? tx.amount : 0;
+        
+        if (tx.type === 'dividend_due' || tx.type === 'profit_posted') {
+          runningBal += tx.amount;
+        } else if (tx.type === 'payout' || tx.type === 'collect') {
+          runningBal -= tx.amount;
+        }
+        
+        return [
+          tx.date,
+          tx.description,
+          tx.currency,
+          debitVal || '-',
+          creditVal || '-',
+          runningBal
+        ];
+      });
+      
+      exportToCSV(filename, headers, rows);
+    });
+  });
+
+  // Export Analysis Sheets click handler
+  document.querySelectorAll('.btn-export-analysis-sheets').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const type = btn.getAttribute('data-contract-type');
+      const isAr = state.activeLanguage === 'ar';
+      
+      const activeContracts = state.contracts.filter(c => c.status !== 'completed');
+      const list = activeContracts.filter(c => c.type === type);
+      const isFunder = type === 'creditor';
+      
+      const filename = isFunder ? 'funder_redemption_analysis.csv' : 'operator_redemption_analysis.csv';
+      
+      const headers = isAr ? 
+        ["الطرف الثاني", "رأس المال الأساسي", "سعر صرف التعاقد", "سعر الصرف الحالي", "مبلغ التصفية العكسي", "صافي الربح/الخسارة التقريبي", "التوصية"] :
+        ["Counterparty", "Starting Principal", "Contract Rate", "Current Market Rate", "Redemption Payoff", "Approx Net Profit", "Recommendation"];
+      
+      const rows = list.map(c => {
+        const contractRate = c.customExchangeRate || 1.0;
+        const currentRate = (c.returnCurrency === 'IQD' || c.principalCurrency === 'IQD')
+          ? (state.exchangeRates['IQD'] || 1450.0)
+          : 1.0;
+          
+        const analysis = calculateRedemptionProfit(c);
+        const profit = analysis.profit;
+        const profitUSD = analysis.profitUSD;
+        
+        const isProfit = profitUSD > 0.01;
+        const profitSign = isProfit ? '+' : '';
+        const profitText = `${profitSign}${profit.toFixed(2)} ${c.principalCurrency} (${profitSign}$${profitUSD.toFixed(2)} USD)`;
+        
+        let recText = '';
+        if (isProfit) {
+          recText = isFunder ?
+            (isAr ? 'ينصح بالإعادة الآن' : 'Return capital now') :
+            (isAr ? 'ينصح بالاسترداد الآن' : 'Recover capital now');
+        } else {
+          recText = isAr ? 'ينصح بالانتظار' : 'Keep active';
+        }
+        
+        return [
+          c.partyName,
+          `${c.principal} ${c.principalCurrency}`,
+          `1 USD = ${contractRate} ${c.returnCurrency}`,
+          `1 USD = ${currentRate} ${c.returnCurrency}`,
+          `${analysis.returnAmount.toFixed(2)} ${c.returnCurrency}`,
+          profitText,
+          recText
+        ];
+      });
+      
+      exportToCSV(filename, headers, rows);
+    });
+  });
+
+  // Export Analysis PDF click handler
+  document.querySelectorAll('.btn-export-analysis-pdf').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const type = btn.getAttribute('data-contract-type');
+      const isAr = state.activeLanguage === 'ar';
+      
+      const activeContracts = state.contracts.filter(c => c.status !== 'completed');
+      const list = activeContracts.filter(c => c.type === type);
+      const isFunder = type === 'creditor';
+      
+      const title = isFunder ? 
+        (isAr ? 'تصفية عقود الممولين (دائن)' : 'Funder Contracts Redemption Analyzer') :
+        (isAr ? 'تصفية عقود المشغلين (مدين)' : 'Operator Contracts Redemption Analyzer');
+      
+      const headers = isAr ? 
+        ["الطرف الثاني", "رأس المال الأساسي", "سعر صرف التعاقد", "سعر الصرف الحالي", "مبلغ التصفية العكسي", "صافي الربح/الخسارة التقريبي", "التوصية"] :
+        ["Counterparty", "Starting Principal", "Contract Rate", "Current Market Rate", "Redemption Payoff", "Approx Net Profit", "Recommendation"];
+      
+      const rows = list.map(c => {
+        const contractRate = c.customExchangeRate || 1.0;
+        const currentRate = (c.returnCurrency === 'IQD' || c.principalCurrency === 'IQD')
+          ? (state.exchangeRates['IQD'] || 1450.0)
+          : 1.0;
+          
+        const analysis = calculateRedemptionProfit(c);
+        const profit = analysis.profit;
+        const profitUSD = analysis.profitUSD;
+        
+        const isProfit = profitUSD > 0.01;
+        const profitSign = isProfit ? '+' : '';
+        const profitText = `${profitSign}${profit.toLocaleString(undefined, {maximumFractionDigits: 2})} ${c.principalCurrency} (${profitSign}$${profitUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} USD)`;
+        
+        let recText = '';
+        if (isProfit) {
+          recText = isFunder ?
+            (isAr ? 'ينصح بالإعادة الآن (أرباح صرف)' : 'Return capital now (arbitrage gain)') :
+            (isAr ? 'ينصح بالاسترداد الآن (أرباح صرف)' : 'Recover capital now (arbitrage gain)');
+        } else {
+          recText = isAr ? 'ينصح بالانتظار (تجنب الخسارة)' : 'Keep active (avoid loss)';
+        }
+        
+        return [
+          c.partyName,
+          `${c.principal.toLocaleString()} ${c.principalCurrency}`,
+          `1 USD = ${contractRate.toLocaleString()} ${c.returnCurrency}`,
+          `1 USD = ${currentRate.toLocaleString()} ${c.returnCurrency}`,
+          `${analysis.returnAmount.toLocaleString(undefined, {maximumFractionDigits: 2})} ${c.returnCurrency}`,
+          profitText,
+          recText
+        ];
+      });
+      
+      exportToPDF(title, headers, rows);
+    });
+  });
 }
 
 // --- RENDER SIMULATION RESULTS & TABLE IN CALCULATOR ---
@@ -4761,8 +5665,8 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Start Cartier Clock updater interval
-  setInterval(updateCartierClock, 1000);
+  // Start Rolex Clock updater interval
+  setInterval(updateRolexClock, 1000);
 });
 
 // --- FORMAL PRINTABLE CONTRACT MODAL ENGINE ---

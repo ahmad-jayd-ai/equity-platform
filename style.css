@@ -1455,5 +1455,70 @@ body.theme-beige .theme-switch {
   }
 }
 
+/* Export Dropdown Styles */
+.export-dropdown {
+  position: relative;
+  display: inline-block;
+}
 
+.export-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  margin-top: 6px;
+  z-index: 1000;
+  min-width: 140px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-premium);
+  overflow: hidden;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
 
+/* Align dropdown menu correctly based on language direction */
+html[lang="ar"] .export-dropdown-menu {
+  left: 0;
+  right: auto;
+}
+html[lang="en"] .export-dropdown-menu {
+  right: 0;
+  left: auto;
+}
+
+.export-menu-item {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 10px 15px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+html[lang="ar"] .export-menu-item {
+  text-align: right;
+}
+html[lang="en"] .export-menu-item {
+  text-align: left;
+}
+
+.export-menu-item:hover {
+  background-color: var(--bg-btn-secondary-hover) !important;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
