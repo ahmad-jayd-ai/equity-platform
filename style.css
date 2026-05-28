@@ -32,13 +32,51 @@
   /* Typography & Layout - Tajawal Google Font */
   --font-arabic: 'Tajawal', sans-serif;
   --font-english: 'Tajawal', sans-serif;
-  --radius-lg: 16px;
-  --radius-md: 10px;
-  --radius-sm: 6px;
+  
+  /* Softer and rounder styling for smoother UI appearance */
+  --radius-lg: 24px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+  
   --transition-fast: 0.2s ease;
   --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
   --shadow-gold: 0 0 15px rgba(174, 124, 80, 0.15);
+  
+  /* Inputs, Row styling variables */
+  --bg-input: rgba(0, 0, 0, 0.2);
+  --bg-input-focus: rgba(0, 0, 0, 0.35);
+  --bg-btn-secondary: rgba(255, 255, 255, 0.05);
+  --bg-btn-secondary-hover: rgba(255, 255, 255, 0.1);
+  --border-table-row: rgba(255, 255, 255, 0.02);
+}
+
+/* Warm Beige Light Theme Overrides */
+body.theme-beige {
+  --bg-primary: #fbf9f4;
+  --bg-secondary: #f3edd7;
+  --bg-card: rgba(243, 237, 215, 0.55);
+  --bg-card-hover: rgba(243, 237, 215, 0.85);
+  --border-color: rgba(139, 90, 43, 0.15);
+  --border-focus: rgba(139, 90, 43, 0.45);
+  
+  --color-gold: #8b5a2b;
+  --color-gold-hover: #a06d3d;
+  --color-gold-light: rgba(139, 90, 43, 0.08);
+  --color-gold-glow: rgba(139, 90, 43, 0.2);
+  
+  --text-primary: #2d2621;
+  --text-secondary: #5c524b;
+  --text-muted: #8d837c;
+  
+  --shadow-premium: 0 10px 30px -10px rgba(139, 90, 43, 0.12);
+  --shadow-gold: 0 0 15px rgba(139, 90, 43, 0.08);
+  
+  --bg-input: rgba(139, 90, 43, 0.06);
+  --bg-input-focus: rgba(139, 90, 43, 0.12);
+  --bg-btn-secondary: rgba(139, 90, 43, 0.06);
+  --bg-btn-secondary-hover: rgba(139, 90, 43, 0.12);
+  --border-table-row: rgba(139, 90, 43, 0.05);
 }
 
 /* Reset & Base Styles */
@@ -57,6 +95,15 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+body.theme-beige {
+  background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(139, 90, 43, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(243, 237, 215, 0.5) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(139, 90, 43, 0.04) 0px, transparent 50%);
+  color: var(--text-primary);
 }
 
 /* Dynamic Font assignment depending on Language */
@@ -133,7 +180,7 @@ html[dir="ltr"] .sidebar {
 }
 
 .logo-text {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 800;
   background: linear-gradient(to right, var(--text-primary), var(--color-gold));
   -webkit-background-clip: text;
@@ -445,7 +492,7 @@ html[dir="ltr"] .main-content {
   padding: 16px 18px;
   color: var(--text-primary);
   font-size: 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-table-row);
 }
 
 .premium-table tbody tr {
@@ -453,7 +500,7 @@ html[dir="ltr"] .main-content {
 }
 
 .premium-table tbody tr:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: var(--border-table-row);
 }
 
 /* Status Badges */
@@ -513,7 +560,7 @@ html[dir="ltr"] .main-content {
 }
 
 .form-control {
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: var(--bg-input);
   border: 1px solid var(--border-color);
   padding: 12px 16px;
   border-radius: var(--radius-md);
@@ -527,8 +574,8 @@ html[dir="ltr"] .main-content {
 .form-control:focus {
   outline: none;
   border-color: var(--color-gold);
-  box-shadow: 0 0 10px rgba(212, 175, 55, 0.15);
-  background-color: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 10px var(--color-gold-glow);
+  background-color: var(--bg-input-focus);
 }
 
 select.form-control {
@@ -576,14 +623,14 @@ html[dir="ltr"] select.form-control {
 }
 
 .btn-secondary {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--bg-btn-secondary);
   border-color: var(--border-color);
   color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: rgba(174, 124, 80, 0.4);
+  background-color: var(--bg-btn-secondary-hover);
+  border-color: var(--color-gold-hover);
 }
 
 .btn-danger {
@@ -657,11 +704,12 @@ html[dir="ltr"] select.form-control {
   text-align: center;
   padding: 4px;
   border-radius: var(--radius-sm);
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: var(--bg-input);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   font-family: var(--font-english);
   font-weight: 700;
+  font-size: 0.85rem;
 }
 
 /* Timeline & Scheduler CSS */
@@ -1347,8 +1395,64 @@ html[dir="ltr"] .search-control {
 .search-control:focus {
   outline: none;
   border-color: var(--color-gold);
-  background-color: rgba(0, 0, 0, 0.4);
-  box-shadow: 0 0 10px rgba(212, 175, 55, 0.15);
+  background-color: var(--bg-input-focus);
+  box-shadow: 0 0 10px var(--color-gold-glow);
+}
+
+/* Theme Switcher Widget */
+.theme-switch {
+  display: flex;
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+body.theme-beige .theme-switch {
+  background-color: rgba(139, 90, 43, 0.05);
+}
+
+.theme-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+  transition: var(--transition-fast);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.theme-btn:hover {
+  color: var(--text-primary);
+}
+
+.theme-btn.active {
+  background-color: var(--color-gold);
+  color: var(--bg-primary);
+}
+
+/* Donut Charts Grid Layout */
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-charts-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 

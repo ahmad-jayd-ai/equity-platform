@@ -2,10 +2,48 @@
 // EQUITY PLATFORM - CORE CONTROLLER & SHARIA BUSINESS ENGINE (ES6 JS)
 // ==========================================================================
 
+// --- CURRENCY FLAG HELPERS ---
+function getCurrencyFlag(curr) {
+  switch (curr) {
+    case 'USD': return '🇺🇸';
+    case 'IQD': return '🇮🇶';
+    case 'EUR': return '🇪🇺';
+    case 'AED': return '🇦🇪';
+    default: return '';
+  }
+}
+
+function formatCurrencyName(curr) {
+  const flag = getCurrencyFlag(curr);
+  return flag ? `${flag} ${curr}` : curr;
+}
+
+// --- CARTIER CLOCK HANDS UPDATER ---
+function updateCartierClock() {
+  const hrHand = document.getElementById('cartier-hour-hand');
+  const minHand = document.getElementById('cartier-minute-hand');
+  const secHand = document.getElementById('cartier-second-hand');
+  
+  if (!hrHand || !minHand) return;
+  
+  const now = new Date();
+  const secs = now.getSeconds();
+  const mins = now.getMinutes();
+  const hrs = now.getHours();
+  
+  const secDeg = secs * 6; // 360 / 60
+  const minDeg = mins * 6 + secs * 0.1; // 360 / 60
+  const hrDeg = (hrs % 12) * 30 + mins * 0.5; // 360 / 12
+  
+  hrHand.style.transform = `rotate(${hrDeg}deg)`;
+  minHand.style.transform = `rotate(${minDeg}deg)`;
+  if (secHand) secHand.style.transform = `rotate(${secDeg}deg)`;
+}
+
 // --- TRANSLATION DICTIONARIES ---
 const translations = {
   ar: {
-    appTitle: "أكويتي",
+    appTitle: "equity platform",
     appSubTitle: "نظام إدارة السيولة والاستثمار المالي",
     devBy: "تطوير: شركة جيدو للحلول البرمجية (Jido-IT)",
     
@@ -117,7 +155,7 @@ const translations = {
     shariaFooter: "أكويتي للحلول المالية - مبني بالكامل وفق ضوابط المضاربة الشرعية المعتمدة ومحركات تسعير العملة العكسية."
   },
   en: {
-    appTitle: "Equity",
+    appTitle: "equity platform",
     appSubTitle: "Liquidity Management & Financial Investment",
     devBy: "Developed by: Jido-IT Software Solutions",
     
@@ -234,6 +272,7 @@ const translations = {
 let state = {
   activeLanguage: 'ar',
   activeTab: 'dashboard',
+  theme: 'dark',
   balanceDisplayCurrency: 'IQD',
   exchangeRates: {
     USD: 1.0,
@@ -1002,7 +1041,7 @@ function formatMultiCurrency(amounts) {
   Object.keys(amounts).forEach(curr => {
     const amt = amounts[curr];
     if (amt !== 0) {
-      parts.push(`${amt.toLocaleString()} ${curr}`);
+      parts.push(`${amt.toLocaleString()} ${formatCurrencyName(curr)}`);
     }
   });
   return parts.length > 0 ? parts.join(" + ") : `0`;
@@ -1392,6 +1431,10 @@ function loadState() {
       }
     });
   }
+  
+  // Apply theme on load
+  if (!state.theme) state.theme = 'dark';
+  document.body.className = state.theme === 'beige' ? 'theme-beige' : '';
 }
 
 // --- APP NAVIGATION AND TRANSLATION ROUTING ---
@@ -1488,6 +1531,9 @@ function renderApp() {
   
   // Re-generate Lucide SVG icons dynamically
   lucide.createIcons();
+  
+  // Update the analog Cartier clock immediately
+  updateCartierClock();
 }
 
 // --- HTML GENERATORS ---
@@ -1499,8 +1545,8 @@ function renderSidebarHTML() {
   return `
     <div>
       <div class="logo-section">
-        <div class="logo-icon">
-          <i data-lucide="scale"></i>
+        <div class="logo-icon" style="background: var(--color-gold-light); color: var(--color-gold);">
+          <i data-lucide="landmark"></i>
         </div>
         <span class="logo-text">${t.appTitle}</span>
       </div>
@@ -1545,14 +1591,6 @@ function renderSidebarHTML() {
     </div>
     
     <div class="sidebar-footer">
-      <div class="lang-switch">
-        <button class="lang-btn ${state.activeLanguage === 'ar' ? 'active' : ''}" data-lang="ar">
-          <span>العربية</span>
-        </button>
-        <button class="lang-btn ${state.activeLanguage === 'en' ? 'active' : ''}" data-lang="en">
-          <span>English</span>
-        </button>
-      </div>
       <!-- Backup Actions -->
       <div class="backup-actions" style="display: flex; gap: 8px; margin-top: 15px; width: 100%;">
         <button class="btn btn-secondary" id="btn-export-db" style="flex: 1; padding: 10px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px;" title="${t.exportDataTooltip}">
@@ -1664,7 +1702,44 @@ function renderHeaderHTML() {
       <h1>${titleStr}</h1>
       <p>${subStr}</p>
     </div>
-    <div class="header-actions" style="display: flex; align-items: center; gap: 15px;">
+    <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
+      <!-- Cartier-inspired Analog Clock -->
+      <div class="cartier-clock" style="position: relative; width: 38px; height: 38px; border-radius: 50%; background: #fdfcf7; border: 2.2px solid #d4af37; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-inline-end: 4px;">
+        <div style="position: absolute; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle, #fcfbf6 60%, #f7f3e8 100%);"></div>
+        <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid rgba(139, 90, 43, 0.2);"></div>
+        
+        <!-- Roman numerals on Clock Face -->
+        <span style="position: absolute; top: 2px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">XII</span>
+        <span style="position: absolute; right: 3px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">III</span>
+        <span style="position: absolute; bottom: 2px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">VI</span>
+        <span style="position: absolute; left: 3px; font-family: 'Times New Roman', serif; font-size: 6px; font-weight: 800; color: #1c1917; line-height: 1;">IX</span>
+        
+        <!-- Blue steel Cartier Hands -->
+        <div id="cartier-hour-hand" style="position: absolute; width: 1.5px; height: 8px; background: #0f2d59; top: 11px; transform-origin: bottom center; transform: rotate(0deg); border-radius: 1px;"></div>
+        <div id="cartier-minute-hand" style="position: absolute; width: 1px; height: 12px; background: #0f2d59; top: 7px; transform-origin: bottom center; transform: rotate(0deg); border-radius: 0.5px;"></div>
+        <div id="cartier-second-hand" style="position: absolute; width: 0.5px; height: 13px; background: #c5a880; top: 6px; transform-origin: bottom center; transform: rotate(0deg);"></div>
+        
+        <!-- Center pin -->
+        <div style="position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #0f2d59; border: 0.5px solid #fff;"></div>
+        <!-- Sapphire Crown cabochon representation -->
+        <div style="position: absolute; right: -3px; top: calc(50% - 2px); width: 2px; height: 4px; background: #1d4ed8; border-radius: 1px; border: 0.5px solid #d4af37;"></div>
+      </div>
+
+      <!-- Compact Language Toggles -->
+      <div class="lang-switch" style="display: flex; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--border-color); padding: 2px; border-radius: var(--radius-sm); gap: 2px; height: 28px; align-items: center;">
+        <button class="lang-btn ${state.activeLanguage === 'ar' ? 'active' : ''}" data-lang="ar" style="padding: 2px 6px; font-size: 0.72rem; font-weight: 700; border: none; background: ${state.activeLanguage === 'ar' ? 'var(--color-gold)' : 'transparent'}; color: ${state.activeLanguage === 'ar' ? 'var(--bg-primary)' : 'var(--text-secondary)'}; cursor: pointer; transition: all 0.2s; border-radius: 4px; line-height: 1.2;">
+          ar
+        </button>
+        <button class="lang-btn ${state.activeLanguage === 'en' ? 'active' : ''}" data-lang="en" style="padding: 2px 6px; font-size: 0.72rem; font-weight: 700; border: none; background: ${state.activeLanguage === 'en' ? 'var(--color-gold)' : 'transparent'}; color: ${state.activeLanguage === 'en' ? 'var(--bg-primary)' : 'var(--text-secondary)'}; cursor: pointer; transition: all 0.2s; border-radius: 4px; line-height: 1.2;">
+          en
+        </button>
+      </div>
+
+      <!-- Shrunk Theme Toggle Switch -->
+      <button class="theme-btn" data-theme="${state.theme === 'dark' ? 'beige' : 'dark'}" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: rgba(0,0,0,0.15); color: var(--text-secondary); cursor: pointer; transition: all 0.2s; padding: 0;" title="${state.activeLanguage === 'ar' ? 'تبديل المظهر' : 'Toggle Theme'}">
+        <i data-lucide="${state.theme === 'beige' ? 'moon' : 'sun'}" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+      </button>
+
       <!-- Notification Bell -->
       <div class="bell-container">
         <button class="bell-btn" id="notification-bell-btn" title="${state.activeLanguage === 'ar' ? 'التنبيهات' : 'Notifications'}">
@@ -1684,10 +1759,10 @@ function renderHeaderHTML() {
         </div>
       </div>
       
-      <!-- Time Indicator -->
-      <div style="font-family: var(--font-english); font-size: 0.85rem; color: var(--text-secondary); background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px;">
-        <i data-lucide="clock" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
-        <span id="current-time-indicator">${new Date().toLocaleDateString(state.activeLanguage === 'ar' ? 'ar-EG' : 'en-US')}</span>
+      <!-- Date Indicator -->
+      <div style="font-family: var(--font-english); font-size: 0.85rem; color: var(--text-secondary); background: rgba(0,0,0,0.05); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px; height: 32px;">
+        <i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--color-gold);"></i>
+        <span id="current-time-indicator">${new Date().toLocaleDateString(state.activeLanguage === 'ar' ? 'ar-EG-u-nu-latn' : 'en-US')}</span>
       </div>
     </div>
   `;
@@ -1740,7 +1815,7 @@ function renderDashboardHTML() {
         <div class="stat-body">
           <div class="stat-value">
             $${totalCreditorUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-            <span class="stat-unit">USD</span>
+            <span class="stat-unit">${formatCurrencyName('USD')}</span>
           </div>
           <div class="stat-footer" style="flex-direction: column; align-items: flex-start; gap: 4px;">
             <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
@@ -1765,7 +1840,7 @@ function renderDashboardHTML() {
         <div class="stat-body">
           <div class="stat-value">
             $${totalDebtorUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-            <span class="stat-unit">USD</span>
+            <span class="stat-unit">${formatCurrencyName('USD')}</span>
           </div>
           <div class="stat-footer" style="flex-direction: column; align-items: flex-start; gap: 4px;">
             <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
@@ -1789,7 +1864,7 @@ function renderDashboardHTML() {
         <div class="stat-body">
           <div class="stat-value">
             $${netArbitrageUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-            <span class="stat-unit">USD / yr</span>
+            <span class="stat-unit">${formatCurrencyName('USD')} / yr</span>
           </div>
           <div class="stat-footer">
             <i data-lucide="percent" style="width: 12px; height: 12px; color: var(--color-gold)"></i>
@@ -1825,10 +1900,10 @@ function renderDashboardHTML() {
               if (curr === 'USD') return '';
               return `
                 <div class="rate-item">
-                  <span class="rate-name">1 USD =</span>
+                  <span class="rate-name">1 ${formatCurrencyName('USD')} =</span>
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <input type="number" step="0.01" class="rate-input" data-curr="${curr}" value="${state.exchangeRates[curr]}">
-                    <span style="font-weight: 700; font-size: 0.85rem;">${curr}</span>
+                    <span style="font-weight: 700; font-size: 0.85rem;">${formatCurrencyName(curr)}</span>
                   </div>
                 </div>
               `;
@@ -1838,6 +1913,28 @@ function renderDashboardHTML() {
         <div style="border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 15px; font-size: 0.8rem; color: var(--text-muted);">
           <i data-lucide="info" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle; margin-inline-end: 4px;"></i>
           تغيير أسعار الصرف يؤثر لحظياً على تقييم العقود وتوزيع أرباح المصالحة.
+        </div>
+      </div>
+    </div>
+    
+    <!-- Donut Charts Row -->
+    <div class="dashboard-charts-grid">
+      <div class="premium-card" style="height: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; width: 100%; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="pie-chart" style="color: var(--color-gold);"></i>
+          ${state.activeLanguage === 'ar' ? 'توزيع رأس المال الاستثماري النشط' : 'Active Investment Capital Distribution'}
+        </h3>
+        <div style="flex: 1; position: relative; width: 100%; max-height: 280px; display: flex; justify-content: center; align-items: center;">
+          <canvas id="capitalDonutChart"></canvas>
+        </div>
+      </div>
+      <div class="premium-card" style="height: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; width: 100%; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="donut" style="color: var(--color-gold);"></i>
+          ${state.activeLanguage === 'ar' ? 'توزيع المستحقات القائمة حسب الشريك' : 'Outstanding Balances by Partner'}
+        </h3>
+        <div style="flex: 1; position: relative; width: 100%; max-height: 280px; display: flex; justify-content: center; align-items: center;">
+          <canvas id="balanceDonutChart"></canvas>
         </div>
       </div>
     </div>
@@ -1906,10 +2003,10 @@ function renderContractsHTML(contractType) {
               <div class="form-group">
                 <label for="form-principal-curr">${t.principalCurrency}</label>
                 <select id="form-principal-curr" class="form-control" style="font-family: var(--font-english);">
-                  <option value="USD" ${isEditing && editingContract.principalCurrency === 'USD' ? 'selected' : (!isEditing ? 'selected' : '')}>USD</option>
-                  <option value="EUR" ${isEditing && editingContract.principalCurrency === 'EUR' ? 'selected' : ''}>EUR</option>
-                  <option value="IQD" ${isEditing && editingContract.principalCurrency === 'IQD' ? 'selected' : ''}>IQD</option>
-                  <option value="AED" ${isEditing && editingContract.principalCurrency === 'AED' ? 'selected' : ''}>AED</option>
+                  <option value="USD" ${isEditing && editingContract.principalCurrency === 'USD' ? 'selected' : (!isEditing ? 'selected' : '')}>🇺🇸 USD</option>
+                  <option value="EUR" ${isEditing && editingContract.principalCurrency === 'EUR' ? 'selected' : ''}>🇪🇺 EUR</option>
+                  <option value="IQD" ${isEditing && editingContract.principalCurrency === 'IQD' ? 'selected' : ''}>🇮🇶 IQD</option>
+                  <option value="AED" ${isEditing && editingContract.principalCurrency === 'AED' ? 'selected' : ''}>🇦🇪 AED</option>
                 </select>
               </div>
             </div>
@@ -1918,10 +2015,10 @@ function renderContractsHTML(contractType) {
             <div class="form-group">
               <label for="form-return-curr">${t.returnCurrency}</label>
               <select id="form-return-curr" class="form-control" style="font-family: var(--font-english); font-weight: bold; border-color: rgba(212, 175, 55, 0.4);">
-                <option value="IQD" ${isEditing && editingContract.returnCurrency === 'IQD' ? 'selected' : (!isEditing ? 'selected' : '')}>IQD</option>
-                <option value="USD" ${isEditing && editingContract.returnCurrency === 'USD' ? 'selected' : ''}>USD</option>
-                <option value="EUR" ${isEditing && editingContract.returnCurrency === 'EUR' ? 'selected' : ''}>EUR</option>
-                <option value="AED" ${isEditing && editingContract.returnCurrency === 'AED' ? 'selected' : ''}>AED</option>
+                <option value="IQD" ${isEditing && editingContract.returnCurrency === 'IQD' ? 'selected' : (!isEditing ? 'selected' : '')}>🇮🇶 IQD</option>
+                <option value="USD" ${isEditing && editingContract.returnCurrency === 'USD' ? 'selected' : ''}>🇺🇸 USD</option>
+                <option value="EUR" ${isEditing && editingContract.returnCurrency === 'EUR' ? 'selected' : ''}>🇪🇺 EUR</option>
+                <option value="AED" ${isEditing && editingContract.returnCurrency === 'AED' ? 'selected' : ''}>🇦🇪 AED</option>
               </select>
             </div>
 
@@ -2058,12 +2155,12 @@ function renderContractsHTML(contractType) {
                           ${c.principal.toLocaleString()}
                         </span>
                         <span style="font-size: 0.8rem; color: var(--text-secondary); margin-inline-start: 4px;">
-                          ${c.principalCurrency}
+                          ${formatCurrencyName(c.principalCurrency)}
                         </span>
                       </td>
                       <td>
                         <span style="font-weight: 800; color: var(--color-gold); font-family: var(--font-english);">
-                          ${c.returnCurrency}
+                          ${formatCurrencyName(c.returnCurrency)}
                         </span>
                       </td>
                       <td>
@@ -2073,7 +2170,7 @@ function renderContractsHTML(contractType) {
                       </td>
                       <td>
                         <span style="font-family: var(--font-english); font-weight: 700; color: ${isFixed ? 'var(--color-gold)' : 'var(--text-primary)'}">
-                          ${isFixed ? monthlyDiv.toLocaleString() + ' ' + c.returnCurrency + ' /شهر' : '%' + c.dividendRate}
+                          ${isFixed ? monthlyDiv.toLocaleString() + ' ' + formatCurrencyName(c.returnCurrency) + (state.activeLanguage === 'ar' ? ' /شهر' : ' /mo') : '%' + c.dividendRate}
                         </span>
                       </td>
                       <td>
@@ -2124,7 +2221,7 @@ function renderCalculatorHTML() {
   return `
     <div class="premium-card">
       <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-        <i data-lucide="scale" style="color: var(--color-gold);"></i>
+        <i data-lucide="calculator" style="color: var(--color-gold);"></i>
         ${t.simTitle}
       </h3>
       
@@ -2142,10 +2239,10 @@ function renderCalculatorHTML() {
               <div class="form-group">
                 <label for="calc-principal-curr">${t.principalCurrency}</label>
                 <select id="calc-principal-curr" class="form-control" style="font-family: var(--font-english);">
-                  <option value="USD" selected>USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="IQD">IQD</option>
-                  <option value="AED">AED</option>
+                  <option value="USD" selected>🇺🇸 USD</option>
+                  <option value="EUR">🇪🇺 EUR</option>
+                  <option value="IQD">🇮🇶 IQD</option>
+                  <option value="AED">🇦🇪 AED</option>
                 </select>
               </div>
             </div>
@@ -2153,10 +2250,10 @@ function renderCalculatorHTML() {
             <div class="form-group">
               <label for="calc-return-curr">${t.returnCurrency}</label>
               <select id="calc-return-curr" class="form-control" style="font-family: var(--font-english); font-weight: bold; border-color: rgba(212, 175, 55, 0.4);">
-                <option value="IQD" selected>IQD</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="AED">AED</option>
+                <option value="IQD" selected>🇮🇶 IQD</option>
+                <option value="USD">🇺🇸 USD</option>
+                <option value="EUR">🇪🇺 EUR</option>
+                <option value="AED">🇦🇪 AED</option>
               </select>
             </div>
 
@@ -2273,7 +2370,7 @@ function renderLedgersHTML() {
         <div class="stat-body">
           <div class="stat-value">
             ${balances.profits.toLocaleString()}
-            <span class="stat-unit">IQD</span>
+            <span class="stat-unit">${formatCurrencyName('IQD')}</span>
           </div>
           <div class="stat-footer">
             <button class="btn btn-secondary btn-statement" data-id="platform_profits" style="padding: 4px 8px; font-size: 0.75rem; width: 100%;">
@@ -2295,7 +2392,7 @@ function renderLedgersHTML() {
         <div class="stat-body">
           <div class="stat-value" style="color: var(--color-gold);">
             ${balances.internalOperations.toLocaleString()}
-            <span class="stat-unit">IQD</span>
+            <span class="stat-unit">${formatCurrencyName('IQD')}</span>
           </div>
           <div class="stat-footer">
             <span class="trend-neutral">${state.contracts.filter(c => c.isInternal && c.status !== 'completed').length} ${state.activeLanguage === 'ar' ? 'عقود تشغيل داخلي' : 'internal contracts'}</span>
@@ -2314,7 +2411,7 @@ function renderLedgersHTML() {
         <div class="stat-body">
           <div class="stat-value" style="color: var(--color-success);">
             ${Object.values(contractBalances.creditors).reduce((acc, curr) => acc + curr.balance, 0).toLocaleString()}
-            <span class="stat-unit">IQD</span>
+            <span class="stat-unit">${formatCurrencyName('IQD')}</span>
           </div>
           <div class="stat-footer">
             <span class="trend-neutral">${balances.creditors.length} حساب متعامل ممول</span>
@@ -2333,7 +2430,7 @@ function renderLedgersHTML() {
         <div class="stat-body">
           <div class="stat-value" style="color: var(--color-danger);">
             ${Object.values(contractBalances.debtors).reduce((acc, curr) => acc + curr.balance, 0).toLocaleString()}
-            <span class="stat-unit">IQD</span>
+            <span class="stat-unit">${formatCurrencyName('IQD')}</span>
           </div>
           <div class="stat-footer">
             <span class="trend-neutral">${balances.debtors.length} حساب متعامل مشغل</span>
@@ -2803,7 +2900,7 @@ function renderMonthlyBalanceHTML() {
     <div style="margin-top: 35px; border-top: 1px solid var(--border-color); padding-top: 25px;">
       <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; color: var(--text-primary);">
         <span style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="scale" style="color: var(--color-gold);"></i>
+          <i data-lucide="wallet" style="color: var(--color-gold);"></i>
           ${t.capitalBalance}
         </span>
         <span style="font-size: 0.75rem; color: var(--text-secondary); background: rgba(255, 255, 255, 0.03); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
@@ -3201,17 +3298,17 @@ function renderAccountStatement(accountId) {
               let cr = '-';
               
               if (tx.type === 'deposit') {
-                cr = `${tx.amount.toLocaleString()} ${tx.currency}`;
+                cr = `${tx.amount.toLocaleString()} ${formatCurrencyName(tx.currency)}`;
               } else if (tx.type === 'withdrawal') {
-                dr = `${tx.amount.toLocaleString()} ${tx.currency}`;
+                dr = `${tx.amount.toLocaleString()} ${formatCurrencyName(tx.currency)}`;
               } else if (tx.type === 'dividend_due') {
-                cr = `${tx.amount.toLocaleString()} ${tx.currency}`;
+                cr = `${tx.amount.toLocaleString()} ${formatCurrencyName(tx.currency)}`;
                 currentBalances[tx.currency] = (currentBalances[tx.currency] || 0) + tx.amount;
               } else if (tx.type === 'payout' || tx.type === 'collect') {
-                dr = `${tx.amount.toLocaleString()} ${tx.currency}`;
+                dr = `${tx.amount.toLocaleString()} ${formatCurrencyName(tx.currency)}`;
                 currentBalances[tx.currency] = (currentBalances[tx.currency] || 0) - tx.amount;
               } else if (tx.type === 'profit_posted') {
-                cr = `${tx.amount.toLocaleString()} ${tx.currency}`;
+                cr = `${tx.amount.toLocaleString()} ${formatCurrencyName(tx.currency)}`;
                 currentBalances[tx.currency] = (currentBalances[tx.currency] || 0) + tx.amount;
               }
               
@@ -3229,7 +3326,7 @@ function renderAccountStatement(accountId) {
                   <td style="color: var(--color-danger); font-family: var(--font-english);">${dr}</td>
                   <td style="color: var(--color-success); font-family: var(--font-english);">${cr}</td>
                   <td style="font-family: var(--font-english); font-weight: bold; color: var(--color-gold);">
-                    ${isDeposit ? '-' : `${(currentBalances[tx.currency] || 0).toLocaleString()} ${tx.currency}`}
+                    ${isDeposit ? '-' : `${(currentBalances[tx.currency] || 0).toLocaleString()} ${formatCurrencyName(tx.currency)}`}
                   </td>
                   <td class="no-print">
                     ${isManual ? `
@@ -3608,6 +3705,19 @@ function setupEventListeners() {
     btn.addEventListener('click', (e) => {
       const lang = btn.getAttribute('data-lang');
       if (lang) toggleLanguage(lang);
+    });
+  });
+  
+  // Theme Switch
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const theme = btn.getAttribute('data-theme');
+      if (theme) {
+        state.theme = theme;
+        document.body.className = theme === 'beige' ? 'theme-beige' : '';
+        saveState();
+        renderApp();
+      }
     });
   });
   
@@ -4287,7 +4397,10 @@ function renderCalculatorResults(data) {
 }
 
 // --- CHART.JS RENDERING LOGIC ---
+// --- CHART.JS RENDERING LOGIC ---
 let activeChart = null;
+let activeCapitalChart = null;
+let activeBalanceChart = null;
 
 function renderDashboardChart() {
   const ctx = document.getElementById('arbitrageChart');
@@ -4295,9 +4408,14 @@ function renderDashboardChart() {
   
   const t = translations[state.activeLanguage];
   
-  if (activeChart) {
-    activeChart.destroy();
-  }
+  if (activeChart) activeChart.destroy();
+  if (activeCapitalChart) activeCapitalChart.destroy();
+  if (activeBalanceChart) activeBalanceChart.destroy();
+  
+  const isBeige = state.theme === 'beige';
+  const labelColor = isBeige ? '#2d2621' : '#f8fafc';
+  const gridColor = isBeige ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
+  const tickColor = isBeige ? '#5c524b' : '#94a3b8';
   
   const months = [];
   const today = new Date();
@@ -4383,10 +4501,10 @@ function renderDashboardChart() {
       scales: {
         x: {
           grid: {
-            color: 'rgba(255, 255, 255, 0.05)'
+            color: gridColor
           },
           ticks: {
-            color: '#94a3b8',
+            color: tickColor,
             font: {
               family: 'Tajawal'
             }
@@ -4394,10 +4512,10 @@ function renderDashboardChart() {
         },
         y: {
           grid: {
-            color: 'rgba(255, 255, 255, 0.05)'
+            color: gridColor
           },
           ticks: {
-            color: '#94a3b8',
+            color: tickColor,
             font: {
               family: 'Tajawal'
             },
@@ -4411,7 +4529,7 @@ function renderDashboardChart() {
         legend: {
           position: 'top',
           labels: {
-            color: '#f8fafc',
+            color: labelColor,
             font: {
               family: 'Tajawal'
             }
@@ -4440,6 +4558,159 @@ function renderDashboardChart() {
       }
     }
   });
+
+  // --- DONUT CHARTS LOGIC ---
+  const donutColors = [
+    'rgba(174, 124, 80, 0.65)',  // Gold
+    'rgba(16, 185, 129, 0.65)',  // Green
+    'rgba(59, 130, 246, 0.65)',  // Blue
+    'rgba(245, 158, 11, 0.65)',  // Orange
+    'rgba(139, 92, 246, 0.65)',  // Purple
+    'rgba(236, 72, 153, 0.65)',  // Pink
+    'rgba(20, 184, 166, 0.65)',  // Teal
+    'rgba(100, 116, 139, 0.65)'  // Slate
+  ];
+  const donutBorders = [
+    '#ae7c50',
+    '#10b981',
+    '#3b82f6',
+    '#f59e0b',
+    '#8b5cf6',
+    '#ec4899',
+    '#14b8a6',
+    '#64748b'
+  ];
+
+  // 1. Capital share donut
+  const partnerCapital = {};
+  state.contracts.forEach(c => {
+    if (c.status === 'completed') return;
+    const name = c.partyName.trim();
+    const capUSD = convertToUSD(c.principal, c.principalCurrency);
+    partnerCapital[name] = (partnerCapital[name] || 0) + capUSD;
+  });
+
+  let capLabels = Object.keys(partnerCapital);
+  let capData = Object.values(partnerCapital);
+
+  if (capLabels.length === 0) {
+    capLabels = [state.activeLanguage === 'ar' ? 'لا توجد عقود نشطة' : 'No Active Contracts'];
+    capData = [0];
+  }
+
+  const capCanvas = document.getElementById('capitalDonutChart');
+  if (capCanvas) {
+    activeCapitalChart = new Chart(capCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: capLabels,
+        datasets: [{
+          data: capData,
+          backgroundColor: donutColors.slice(0, capLabels.length),
+          borderColor: donutBorders.slice(0, capLabels.length),
+          borderWidth: 1.5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            rtl: state.activeLanguage === 'ar',
+            labels: {
+              color: labelColor,
+              font: { family: 'Tajawal', size: 11 }
+            }
+          },
+          tooltip: {
+            titleFont: { family: 'Tajawal' },
+            bodyFont: { family: 'Tajawal' },
+            callbacks: {
+              label: function(context) {
+                const val = context.parsed;
+                return ' ' + context.label + ': $' + val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' USD';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Outstanding balance share donut
+  const balObj = {};
+  const consolidated = getConsolidatedBalances();
+
+  consolidated.creditors.forEach(cb => {
+    let balUSD = 0;
+    Object.keys(cb.balances).forEach(curr => {
+      balUSD += convertToUSD(cb.balances[curr], curr);
+    });
+    if (Math.abs(balUSD) > 0.01) {
+      const name = cb.partyName.trim();
+      balObj[name] = (balObj[name] || 0) + Math.abs(balUSD);
+    }
+  });
+
+  consolidated.debtors.forEach(db => {
+    let balUSD = 0;
+    Object.keys(db.balances).forEach(curr => {
+      balUSD += convertToUSD(db.balances[curr], curr);
+    });
+    if (Math.abs(balUSD) > 0.01) {
+      const name = db.partyName.trim();
+      balObj[name] = (balObj[name] || 0) + Math.abs(balUSD);
+    }
+  });
+
+  let balLabels = Object.keys(balObj);
+  let balData = Object.values(balObj);
+
+  if (balLabels.length === 0) {
+    balLabels = [state.activeLanguage === 'ar' ? 'لا توجد مستحقات معلقة' : 'No Outstanding Balances'];
+    balData = [0];
+  }
+
+  const balCanvas = document.getElementById('balanceDonutChart');
+  if (balCanvas) {
+    activeBalanceChart = new Chart(balCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: balLabels,
+        datasets: [{
+          data: balData,
+          backgroundColor: donutColors.slice(0, balLabels.length),
+          borderColor: donutBorders.slice(0, balLabels.length),
+          borderWidth: 1.5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            rtl: state.activeLanguage === 'ar',
+            labels: {
+              color: labelColor,
+              font: { family: 'Tajawal', size: 11 }
+            }
+          },
+          tooltip: {
+            titleFont: { family: 'Tajawal' },
+            bodyFont: { family: 'Tajawal' },
+            callbacks: {
+              label: function(context) {
+                const val = context.parsed;
+                return ' ' + context.label + ': $' + val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' USD';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
 }
 
 // --- SYSTEM INITIALIZATION ---
@@ -4489,6 +4760,9 @@ window.addEventListener('DOMContentLoaded', () => {
       `;
     }
   }
+  
+  // Start Cartier Clock updater interval
+  setInterval(updateCartierClock, 1000);
 });
 
 // --- FORMAL PRINTABLE CONTRACT MODAL ENGINE ---
