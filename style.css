@@ -1522,3 +1522,71 @@ html[lang="en"] .export-menu-item {
     transform: translateY(0);
   }
 }
+
+/* Currency Ratio Indicators Layout */
+.currency-ratio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.currency-ratio-card {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+body.theme-beige .currency-ratio-card {
+  background: rgba(139, 90, 43, 0.02);
+}
+
+.currency-ratio-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  border-color: var(--color-gold-glow);
+}
+
+.currency-bar-track {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+body.theme-beige .currency-bar-track {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.currency-bar-split {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 4px #fff;
+  transform: translateX(-50%);
+  opacity: 0.8;
+}
+
+.currency-bar-rec {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.currency-bar-rec strong {
+  color: var(--text-primary);
+}

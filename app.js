@@ -3214,6 +3214,327 @@ function renderAnalysisHTML() {
   
   const iqdHedgingRatio = funderMonthlyReturnsIQD > 0 ? (operatorMonthlyReturnsIQD / funderMonthlyReturnsIQD) * 100 : 0;
   
+  // --- PORTFOLIO ORIGINAL CURRENCY BALANCE CALCULATIONS ---
+  let funderPrincipalUSD = 0;
+  let funderPrincipalIQD = 0;
+  let operatorPrincipalUSD = 0;
+  let operatorPrincipalIQD = 0;
+
+  funderContracts.forEach(c => {
+    if (c.principalCurrency === 'USD') {
+      funderPrincipalUSD += c.principal;
+    } else if (c.principalCurrency === 'IQD') {
+      funderPrincipalIQD += c.principal;
+    }
+  });
+
+  operatorContracts.forEach(c => {
+    if (c.principalCurrency === 'USD') {
+      operatorPrincipalUSD += c.principal;
+    } else if (c.principalCurrency === 'IQD') {
+      operatorPrincipalIQD += c.principal;
+    }
+  });
+
+  const marketRateIQD = state.exchangeRates['IQD'] || 1450.0;
+  
+  // --- DUAL CURRENCY STRUCTURE RATIO CALCULATIONS ---
+  // 1. Funding Contracts
+  const fundingIQDVal = funderPrincipalIQD / marketRateIQD;
+  const fundingUSDVal = funderPrincipalUSD;
+  const fundingTotalVal = fundingIQDVal + fundingUSDVal;
+  const fundingIQDPercent = fundingTotalVal > 0 ? (fundingIQDVal / fundingTotalVal) * 100 : 50;
+  const fundingUSDPercent = fundingTotalVal > 0 ? (fundingUSDVal / fundingTotalVal) * 100 : 50;
+
+  // 2. Operator Contracts
+  const operatorIQDVal = operatorPrincipalIQD / marketRateIQD;
+  const operatorUSDVal = operatorPrincipalUSD;
+  const operatorTotalVal = operatorIQDVal + operatorUSDVal;
+  const operatorIQDPercent = operatorTotalVal > 0 ? (operatorIQDVal / operatorTotalVal) * 100 : 50;
+  const operatorUSDPercent = operatorTotalVal > 0 ? (operatorUSDVal / operatorTotalVal) * 100 : 50;
+
+  // 3. Outstanding Dues (المستحقات)
+  const unpaidDues = state.transactions.filter(tx => {
+    if (tx.type !== 'dividend_due') return false;
+    const isSettled = state.transactions.some(
+      settled => settled.contractId === tx.contractId && 
+                 settled.period === tx.period && 
+                 (settled.type === 'payout' || settled.type === 'collect')
+    );
+    return !isSettled;
+  });
+  let duesIQD = 0;
+  let duesUSD = 0;
+  unpaidDues.forEach(tx => {
+    if (tx.currency === 'IQD') duesIQD += tx.amount;
+    else if (tx.currency === 'USD') duesUSD += tx.amount;
+  });
+  const duesIQDVal = duesIQD / marketRateIQD;
+  const duesUSDVal = duesUSD;
+  const duesTotalVal = duesIQDVal + duesUSDVal;
+  const duesIQDPercent = duesTotalVal > 0 ? (duesIQDVal / duesTotalVal) * 100 : 50;
+  const duesUSDPercent = duesTotalVal > 0 ? (duesUSDVal / duesTotalVal) * 100 : 50;
+
+  // 4. Settled Payments (المدفوعات)
+  const settledPayments = state.transactions.filter(tx => tx.type === 'payout' || tx.type === 'collect');
+  let paymentsIQD = 0;
+  let paymentsUSD = 0;
+  settledPayments.forEach(tx => {
+    if (tx.currency === 'IQD') paymentsIQD += tx.amount;
+    else if (tx.currency === 'USD') paymentsUSD += tx.amount;
+  });
+  const paymentsIQDVal = paymentsIQD / marketRateIQD;
+  const paymentsUSDVal = paymentsUSD;
+  const paymentsTotalVal = paymentsIQDVal + paymentsUSDVal;
+  const paymentsIQDPercent = paymentsTotalVal > 0 ? (paymentsIQDVal / paymentsTotalVal) * 100 : 50;
+  const paymentsUSDPercent = paymentsTotalVal > 0 ? (paymentsUSDVal / paymentsTotalVal) * 100 : 50;
+
+  // --- ADVISORY RECOMMENDATIONS FOR CURRENCY STRUCTURE ---
+  // Funding Contracts Recommendation
+  let fundingRecommendationAr = '';
+  let fundingRecommendationEn = '';
+  if (fundingUSDPercent > 65) {
+    fundingRecommendationAr = 'يهيمن الدولار على التمويل. يُنصح بتحفيز عقود التمويل بالدينار العراقي (IQD) لتقليل الضغط على السيولة الصعبة وتحقيق توازن أفضل.';
+    fundingRecommendationEn = 'USD dominates funding. We advise onboarding more IQD funders to reduce foreign currency liabilities and balance the portfolio.';
+  } else if (fundingIQDPercent > 65) {
+    fundingRecommendationAr = 'تركز عالٍ للتمويل بالدينار. يُنصح بزيادة التمويل بالدولار (USD) لحماية رأس مال المنصة من مخاطر تقلبات وتضخم العملة المحلية.';
+    fundingRecommendationEn = 'High IQD concentration. We recommend onboarding USD funders to shield the funding base against local currency devaluation.';
+  } else {
+    fundingRecommendationAr = 'توزيع العملات في التمويل متوازن ومثالي. يحقق تحوطاً طبيعياً ممتازاً ويقلل مخاطر تركز العملة الواحدة.';
+    fundingRecommendationEn = 'Funding currency mix is well-balanced. This provides optimal natural hedging and lowers single-currency exposure.';
+  }
+
+  // Operator Contracts Recommendation
+  let operatorRecommendationAr = '';
+  let operatorRecommendationEn = '';
+  if (operatorUSDPercent > 65) {
+    operatorRecommendationAr = 'تركز تشغيلي عالٍ بالدولار. تأكد من قدرة المشغلين على سداد عوائد بالدولار. يُنصح بزيادة التوزيع بالدينار لتتناسب مع التكاليف المحلية.';
+    operatorRecommendationEn = 'High USD operator concentration. Ensure operators have robust USD yields. We suggest expanding IQD operator deployments.';
+  } else if (operatorIQDPercent > 65) {
+    operatorRecommendationAr = 'تركز تشغيلي عالٍ بالدينار. يُنصح بالتحول التدريجي نحو صياغة عقود تشغيل جديدة بالدولار لحماية عوائد المنصة من تقلبات سعر الصرف.';
+    operatorRecommendationEn = 'High IQD operator concentration. We suggest structuring future deployments in USD to secure returns in stable currency.';
+  } else {
+    operatorRecommendationAr = 'توزيع عقود التشغيل متوازن ويضمن عوائد مستقرة موزعة بين الأنشطة التشغيلية المحلية والدولارية.';
+    operatorRecommendationEn = 'Operator deployments are balanced, securing stable returns across domestic and dollarized operations.';
+  }
+
+  // Outstanding Dues Recommendation
+  let duesRecommendationAr = '';
+  let duesRecommendationEn = '';
+  if (duesUSDPercent > 65) {
+    duesRecommendationAr = 'مستحقات معلقة ضخمة بالدولار. لتجنب تأخير التحصيل، يُنصح بقبول تسويات مؤقتة بالدينار العراقي بسعر السوق الموازي لتسريع السيولة.';
+    duesRecommendationEn = 'Heavy USD outstanding dues. To prevent collection delays, consider accepting temporary IQD settlements at the market rate.';
+  } else if (duesIQDPercent > 65) {
+    duesRecommendationAr = 'مستحقات معلقة ضخمة بالدينار. أي تأخير في التحصيل يعرض القيمة للتراجع. يُنصح بالتحصيل العاجل بالدينار وتجنب تراكم الديون المحلية.';
+    duesRecommendationEn = 'Heavy IQD outstanding dues. Delays expose value to devaluation. We advise immediate collections to limit IQD outstanding balances.';
+  } else {
+    duesRecommendationAr = 'توازن هيكلي ممتاز في مستحقات العملتين، مما يقلل من مخاطر تركز الديون المعلقة ويسهل تسوية المدفوعات.';
+    duesRecommendationEn = 'Excellent balance in outstanding dues. This mitigates outstanding debt concentration and simplifies cross-currency settlement.';
+  }
+
+  // Settled Payments Recommendation
+  let paymentsRecommendationAr = '';
+  let paymentsRecommendationEn = '';
+  if (paymentsUSDPercent > 65) {
+    paymentsRecommendationAr = 'غالبية المدفوعات بالدولار. يُنصح بالاحتفاظ باحتياطي كافٍ بالدينار العراقي (IQD) لتغطية النفقات الإدارية والمصاريف التشغيلية المحلية.';
+    paymentsRecommendationEn = 'Payments are mostly in USD. Maintain adequate IQD cash reserves to handle domestic administrative overheads and local fees.';
+  } else if (paymentsIQDPercent > 65) {
+    paymentsRecommendationAr = 'غالبية المدفوعات بالدينار. يُنصح بتحويل فائض السيولة بالدينار إلى دولار أمريكي لحفظ القيمة وتأمين الاحتياطيات من التضخم.';
+    paymentsRecommendationEn = 'Payments are mostly in IQD. We advise converting surplus cash reserves from IQD into USD to lock in asset values and hedge inflation.';
+  } else {
+    paymentsRecommendationAr = 'حركة المدفوعات والسيولة التاريخية تتم بتوازن مالي ممتاز، مما يدعم مرونة خزينة المنصة لمواجهة التغيرات.';
+    paymentsRecommendationEn = 'Historical payment velocity is balanced, supporting treasury resilience and robust liquidity management.';
+  }
+
+  const currencyDistributionHTML = `
+    <!-- Currency Distribution & Linear Indicators Section -->
+    <div class="premium-card" style="margin-bottom: 25px;">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+        <i data-lucide="split" style="color: var(--color-gold); width: 22px; height: 22px;"></i>
+        <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--color-gold); margin: 0; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span>${isAr ? 'تحليل هيكل توزيع العملات الثنائي (د.ع / $)' : 'Dual Currency Structural Ratio Analysis (IQD / USD)'}</span>
+          <span style="font-size: 0.75rem; font-weight: 400; opacity: 0.8; font-family: var(--font-english); border: 1px solid var(--color-gold); padding: 2px 6px; border-radius: 4px;">RATIO METRICS</span>
+        </h3>
+      </div>
+
+      <div class="currency-ratio-grid">
+        <!-- 1. Funding Contracts Card -->
+        <div class="currency-ratio-card">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="arrow-down-left" style="color: var(--color-success); width: 16px; height: 16px;"></i>
+                ${isAr ? 'عقود التمويل (الممولين)' : 'Funding Contracts (Funders)'}
+              </span>
+              <span class="badge badge-gold" style="font-family: var(--font-english); font-size: 0.65rem;">${isAr ? 'رأس المال' : 'Capital'}</span>
+            </div>
+            
+            <div class="currency-bar-track" style="background: linear-gradient(90deg, var(--color-gold) 0%, var(--color-gold) ${fundingIQDPercent}%, var(--color-success) ${fundingIQDPercent}%, var(--color-success) 100%);">
+              <div class="currency-bar-split" style="left: ${fundingIQDPercent}%;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; margin-bottom: 5px;">
+              <div style="color: var(--color-gold); display: flex; flex-direction: column;">
+                <span style="font-family: var(--font-english);">${fundingIQDPercent.toFixed(1)}% IQD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">${funderPrincipalIQD.toLocaleString()} IQD</span>
+              </div>
+              <div style="color: var(--color-success); display: flex; flex-direction: column; align-items: flex-end;">
+                <span style="font-family: var(--font-english);">${fundingUSDPercent.toFixed(1)}% USD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">$${funderPrincipalUSD.toLocaleString()} USD</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="currency-bar-rec">
+            <strong>${isAr ? 'توصية الخبير المالي:' : 'Advisor Recommendation:'}</strong>
+            ${isAr ? fundingRecommendationAr : fundingRecommendationEn}
+          </div>
+        </div>
+
+        <!-- 2. Operator Contracts Card -->
+        <div class="currency-ratio-card">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="arrow-up-right" style="color: var(--color-danger); width: 16px; height: 16px;"></i>
+                ${isAr ? 'عقود التشغيل (المشغلين)' : 'Operator Contracts (Operators)'}
+              </span>
+              <span class="badge badge-gold" style="font-family: var(--font-english); font-size: 0.65rem;">${isAr ? 'التشغيل' : 'Deployment'}</span>
+            </div>
+            
+            <div class="currency-bar-track" style="background: linear-gradient(90deg, var(--color-gold) 0%, var(--color-gold) ${operatorIQDPercent}%, var(--color-success) ${operatorIQDPercent}%, var(--color-success) 100%);">
+              <div class="currency-bar-split" style="left: ${operatorIQDPercent}%;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; margin-bottom: 5px;">
+              <div style="color: var(--color-gold); display: flex; flex-direction: column;">
+                <span style="font-family: var(--font-english);">${operatorIQDPercent.toFixed(1)}% IQD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">${operatorPrincipalIQD.toLocaleString()} IQD</span>
+              </div>
+              <div style="color: var(--color-success); display: flex; flex-direction: column; align-items: flex-end;">
+                <span style="font-family: var(--font-english);">${operatorUSDPercent.toFixed(1)}% USD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">$${operatorPrincipalUSD.toLocaleString()} USD</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="currency-bar-rec">
+            <strong>${isAr ? 'توصية الخبير المالي:' : 'Advisor Recommendation:'}</strong>
+            ${isAr ? operatorRecommendationAr : operatorRecommendationEn}
+          </div>
+        </div>
+
+        <!-- 3. Outstanding Dues Card -->
+        <div class="currency-ratio-card">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="clock" style="color: var(--color-warning); width: 16px; height: 16px;"></i>
+                ${isAr ? 'المستحقات المعلقة (أرباح مستحقة)' : 'Outstanding Dues (Receivables)'}
+              </span>
+              <span class="badge badge-warning" style="font-family: var(--font-english); font-size: 0.65rem;">${isAr ? 'معلقة' : 'Pending'}</span>
+            </div>
+            
+            <div class="currency-bar-track" style="background: linear-gradient(90deg, var(--color-gold) 0%, var(--color-gold) ${duesIQDPercent}%, var(--color-success) ${duesIQDPercent}%, var(--color-success) 100%);">
+              <div class="currency-bar-split" style="left: ${duesIQDPercent}%;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; margin-bottom: 5px;">
+              <div style="color: var(--color-gold); display: flex; flex-direction: column;">
+                <span style="font-family: var(--font-english);">${duesIQDPercent.toFixed(1)}% IQD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">${duesIQD.toLocaleString()} IQD</span>
+              </div>
+              <div style="color: var(--color-success); display: flex; flex-direction: column; align-items: flex-end;">
+                <span style="font-family: var(--font-english);">${duesUSDPercent.toFixed(1)}% USD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">$${duesUSD.toLocaleString()} USD</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="currency-bar-rec">
+            <strong>${isAr ? 'توصية الخبير المالي:' : 'Advisor Recommendation:'}</strong>
+            ${isAr ? duesRecommendationAr : duesRecommendationEn}
+          </div>
+        </div>
+
+        <!-- 4. Settled Payments Card -->
+        <div class="currency-ratio-card">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="check-circle" style="color: var(--color-success); width: 16px; height: 16px;"></i>
+                ${isAr ? 'المدفوعات التاريخية (المسددة)' : 'Settled Payments (Historical)'}
+              </span>
+              <span class="badge badge-success" style="font-family: var(--font-english); font-size: 0.65rem;">${isAr ? 'مسددة' : 'Settled'}</span>
+            </div>
+            
+            <div class="currency-bar-track" style="background: linear-gradient(90deg, var(--color-gold) 0%, var(--color-gold) ${paymentsIQDPercent}%, var(--color-success) ${paymentsIQDPercent}%, var(--color-success) 100%);">
+              <div class="currency-bar-split" style="left: ${paymentsIQDPercent}%;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; margin-bottom: 5px;">
+              <div style="color: var(--color-gold); display: flex; flex-direction: column;">
+                <span style="font-family: var(--font-english);">${paymentsIQDPercent.toFixed(1)}% IQD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">${paymentsIQD.toLocaleString()} IQD</span>
+              </div>
+              <div style="color: var(--color-success); display: flex; flex-direction: column; align-items: flex-end;">
+                <span style="font-family: var(--font-english);">${paymentsUSDPercent.toFixed(1)}% USD</span>
+                <span style="font-size: 0.7rem; opacity: 0.75; font-family: var(--font-english); font-weight: normal;">$${paymentsUSD.toLocaleString()} USD</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="currency-bar-rec">
+            <strong>${isAr ? 'توصية الخبير المالي:' : 'Advisor Recommendation:'}</strong>
+            ${isAr ? paymentsRecommendationAr : paymentsRecommendationEn}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // USD Principal Balance recommendation
+  let usdBalanceAdviceAr = '';
+  let usdBalanceAdviceEn = '';
+  
+  if (operatorPrincipalUSD < funderPrincipalUSD) {
+    usdBalanceAdviceAr = `فائض تمويل بالدولار غير مغطى تشغيلياً بقيمة <strong>$${(funderPrincipalUSD - operatorPrincipalUSD).toLocaleString()} USD</strong>. يُنصح بإبرام <strong>عقود مشغلين جديدة بالدولار الأمريكي (USD)</strong>.`;
+    usdBalanceAdviceEn = `Surplus USD funding of <strong>$${(funderPrincipalUSD - operatorPrincipalUSD).toLocaleString()} USD</strong> is unallocated. We recommend new <strong>USD Operator contracts</strong>.`;
+  } else if (operatorPrincipalUSD > funderPrincipalUSD) {
+    usdBalanceAdviceAr = `التزامات تشغيل الدولار تفوق التمويل المتوفر بقيمة <strong>$${(operatorPrincipalUSD - funderPrincipalUSD).toLocaleString()} USD</strong>. يُنصح بجذب <strong>عقود ممولين جديدة بالدولار الأمريكي (USD)</strong>.`;
+    usdBalanceAdviceEn = `USD operator deployments exceed funder capital by <strong>$${(operatorPrincipalUSD - funderPrincipalUSD).toLocaleString()} USD</strong>. We recommend onboarding <strong>USD Funder contracts</strong>.`;
+  } else {
+    usdBalanceAdviceAr = `رأس مال الدولار متوازن تماماً بين الممولين والمشغلين.`;
+    usdBalanceAdviceEn = `USD capital is perfectly balanced between funders and operators.`;
+  }
+
+  // IQD Principal Balance recommendation
+  let iqdBalanceAdviceAr = '';
+  let iqdBalanceAdviceEn = '';
+  
+  if (operatorPrincipalIQD < funderPrincipalIQD) {
+    iqdBalanceAdviceAr = `فائض تمويل بالدينار غير مغطى تشغيلياً بقيمة <strong>${(funderPrincipalIQD - operatorPrincipalIQD).toLocaleString()} IQD</strong>. يُنصح بإبرام <strong>عقود مشغلين جديدة بالدينار العراقي (IQD)</strong>.`;
+    iqdBalanceAdviceEn = `Surplus IQD funding of <strong>${(funderPrincipalIQD - operatorPrincipalIQD).toLocaleString()} IQD</strong> is unallocated. We recommend new <strong>IQD Operator contracts</strong>.`;
+  } else if (operatorPrincipalIQD > funderPrincipalIQD) {
+    iqdBalanceAdviceAr = `التزامات تشغيل الدينار تفوق التمويل المتوفر بقيمة <strong>${(operatorPrincipalIQD - funderPrincipalIQD).toLocaleString()} IQD</strong>. يُنصح بجذب <strong>عقود ممولين جديدة بالدينار العراقي (IQD)</strong>.`;
+    iqdBalanceAdviceEn = `IQD operator deployments exceed funder capital by <strong>${(operatorPrincipalIQD - funderPrincipalIQD).toLocaleString()} IQD</strong>. We recommend onboarding <strong>IQD Funder contracts</strong>.`;
+  } else {
+    iqdBalanceAdviceAr = `رأس مال الدينار متوازن تماماً بين الممولين والمشغلين.`;
+    iqdBalanceAdviceEn = `IQD capital is perfectly balanced between funders and operators.`;
+  }
+
+  // FX Arbitrage Recommendation based on market rate
+  let fxRecommendationAr = '';
+  let fxRecommendationEn = '';
+  
+  if (marketRateIQD > 1460) {
+    fxRecommendationAr = `سعر صرف السوق الحالي مرتفع (الدولار قوي: <strong>1 USD = ${marketRateIQD} IQD</strong>). هذا هو الوقت الأمثل لجذب <strong>عقود تمويل (ممولين) بالدولار الأمريكي (USD) وعوائد بالدينار العراقي (IQD)</strong> لتأمين عوائد مرتفعة، وبالمقابل يُنصح بصياغة <strong>عقود تشغيل (مشغلين) بالدينار العراقي (IQD) وعوائد بالدولار (USD)</strong> لتأمين أرباح فروقات صرف عكسية عالية للمنصة عند التصفية.`;
+    fxRecommendationEn = `The current market rate is high (strong USD: <strong>1 USD = ${marketRateIQD} IQD</strong>). This is the optimal time to onboard <strong>USD Funders with IQD returns</strong> to lock in high yields, and establish <strong>IQD Operators with USD returns</strong> to capture maximum inverse arbitrage margins for the platform.`;
+  } else {
+    fxRecommendationAr = `سعر صرف السوق الحالي منخفض أو مستقر (الدينار قوي: <strong>1 USD = ${marketRateIQD} IQD</strong>). يُنصح بالتحوط عن طريق إبرام <strong>عقود تمويل (ممولين) بالدينار العراقي (IQD) مع عوائد بالدولار (USD)</strong> لحفظ القيمة، وبالمقابل صياغة <strong>عقود تشغيل (مشغلين) بالدولار الأمريكي (USD) مع عوائد بالدينار العراقي (IQD)</strong> للاستفادة من صعود الصرف المتوقع لاحقاً.`;
+    fxRecommendationEn = `The current market rate is low or stable (strong IQD: <strong>1 USD = ${marketRateIQD} IQD</strong>). It is advised to hedge by onboarding <strong>IQD Funders with USD returns</strong>, and deploying <strong>USD Operators with IQD returns</strong> to benefit from anticipated exchange rate movements.`;
+  }
+
   // Generate professional advisor recommendations
   let principalAnalysisAr = '';
   let principalAnalysisEn = '';
@@ -3251,6 +3572,13 @@ function renderAnalysisHTML() {
     principalRecommendationAr = `<strong>خطوات التحوط المقترحة:</strong> الاستمرار في السياسة الحالية مع المحافظة على هامش سيولة احتياطية بمعدل 5% لمواجهة أي طلبات تصفية طارئة دون التسبب في خلل بالتدفقات التشغيلية.`;
     principalRecommendationEn = `<strong>Actionable Hedging Steps:</strong> Maintain the current deployment run-rate. Keep a 5% liquid cash reserve on standby to settle emergency contract redemptions without disrupting ongoing operations.`;
   }
+  
+  let iqdStatusColor = '';
+  let iqdStatusIcon = '';
+  let iqdAnalysisAr = '';
+  let iqdAnalysisEn = '';
+  let iqdRecommendationAr = '';
+  let iqdRecommendationEn = '';
   
   if (funderMonthlyReturnsIQD === 0 && operatorMonthlyReturnsIQD === 0) {
     iqdStatusColor = 'var(--text-secondary)';
@@ -3365,7 +3693,7 @@ function renderAnalysisHTML() {
       <tr>
         <th>${isAr ? 'الطرف الثاني' : 'Counterparty'}</th>
         <th>${isAr ? 'رأس المال الأساسي' : 'Starting Principal'}</th>
-        <th>${isAr ? 'سعر صرف التعاقد' : 'Contract Rate'}</th>
+        <th>${isAr ? 'سعر صرف التعاقع' : 'Contract Rate'}</th>
         <th>${isAr ? 'سعر الصرف الحالي' : 'Current Market Rate'}</th>
         <th>${isAr ? 'مبلغ التصفية (عكسي)' : 'Redemption Payoff'}</th>
         <th>${isAr ? 'صافي الربح/الخسارة التقريبي' : 'Approx. Net Profit'}</th>
@@ -3376,6 +3704,8 @@ function renderAnalysisHTML() {
 
   return `
     <div class="analysis-view" style="animation: fadeIn 0.3s ease-in-out;">
+      
+      ${currencyDistributionHTML}
       
       <!-- Currency Exposure & Hedging Dashboard -->
       <div class="dashboard-grid" style="margin-bottom: 25px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
@@ -3491,6 +3821,46 @@ function renderAnalysisHTML() {
             </div>
           </div>
         </div>
+
+        <!-- FX Strategy & Contract Allocator Section -->
+        <div style="margin-top: 20px; border-top: 1px solid rgba(139, 90, 43, 0.15); padding-top: 15px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <i data-lucide="shuffle" style="color: var(--color-gold); width: 18px; height: 18px;"></i>
+            <span style="font-weight: 700; color: var(--color-gold); font-size: 0.95rem;">
+              ${isAr ? 'توجيهات العملة والتعاقدات المثلى (FX & Contract Allocator)' : 'Optimal Currency Allocation & Contract Structuring'}
+            </span>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px;">
+            <!-- Asset Balance Status Card -->
+            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 4px; border: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                  <span>${isAr ? 'توازن أصول العملات للمحفظة' : 'Portfolio Currency Asset Balances'}</span>
+                  <span class="badge badge-secondary" style="font-family: var(--font-english); font-size: 0.65rem; padding: 2px 4px;">BALANCES</span>
+                </div>
+                <ul style="margin: 0; padding-inline-start: 15px; font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary);">
+                  <li style="margin-bottom: 6px;">${usdBalanceAdviceAr ? (isAr ? usdBalanceAdviceAr : usdBalanceAdviceEn) : ''}</li>
+                  <li>${iqdBalanceAdviceAr ? (isAr ? iqdBalanceAdviceAr : iqdBalanceAdviceEn) : ''}</li>
+                </ul>
+              </div>
+            </div>
+            
+            <!-- FX Strategy Advice Card -->
+            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 4px; border: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                  <span>${isAr ? 'استراتيجية صياغة العقود حسب السوق' : 'Market-Driven FX Contract Strategy'}</span>
+                  <span class="badge badge-gold" style="font-family: var(--font-english); font-size: 0.65rem; padding: 2px 4px;">FX STRATEGY</span>
+                </div>
+                <div style="font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary);">
+                  ${isAr ? fxRecommendationAr : fxRecommendationEn}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Funder Contracts Section -->
