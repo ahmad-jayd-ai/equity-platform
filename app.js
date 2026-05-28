@@ -2761,7 +2761,119 @@ function renderMonthlyBalanceHTML() {
             </div>
           </div>
           <div class="stat-body">
-            <div class="stat-value" style="font-size: 1.4rem; color: var(--color-${netStatusClass}); font-f// Renders the specific ledger statement table for a party/platform
+            <div class="stat-value" style="font-size: 1.4rem; color: var(--color-${netStatusClass}); font-family: var(--font-english);">
+              ${totalNet >= 0 ? '+' : ''}${formatVal(totalNet)}
+            </div>
+            <div class="stat-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'الصافي المالي الإجمالي التراكمي' : 'Cumulative net balance'}</span>
+              <span class="badge ${netBadgeClass}" style="padding: 2px 8px; font-size: 0.7rem;">
+                ${totalNet >= 0 ? labelProfit : labelLoss}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Table of monthly yield breakdown -->
+      <div class="premium-card" style="margin-top: 15px;">
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+          <span>${labelCurrencyUnification}</span>
+          <span>${isAr ? `إجمالي الفحوصات: ${monthlyData.length} شهور` : `Total periods: ${monthlyData.length} months`}</span>
+        </div>
+        <div class="table-container">
+          <table class="premium-table">
+            <thead>
+              <tr>
+                <th>${labelMonth}</th>
+                <th>${labelFunderDues}</th>
+                <th>${labelOperatorDues}</th>
+                <th>${labelNetProfit}</th>
+                <th>${labelStatus}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: CAPITAL PRINCIPAL BALANCE -->
+    <div style="margin-top: 35px; border-top: 1px solid var(--border-color); padding-top: 25px;">
+      <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; color: var(--text-primary);">
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="scale" style="color: var(--color-gold);"></i>
+          ${t.capitalBalance}
+        </span>
+        <span style="font-size: 0.75rem; color: var(--text-secondary); background: rgba(255, 255, 255, 0.03); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          ${isAr ? 'محتسب بالدولار فقط (USD)' : 'Calculated in USD only'}
+        </span>
+      </h3>
+      
+      <div class="dashboard-grid" style="margin-bottom: 15px;">
+        <div class="premium-card stat-card danger">
+          <div class="stat-header">
+            <span class="stat-title">${t.funderCapital}</span>
+            <div class="stat-icon">
+              <i data-lucide="shield-alert" style="color: var(--color-danger);"></i>
+            </div>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" style="font-size: 1.4rem; font-family: var(--font-english);">
+              ${formatUSD(totalFunderCapital)}
+            </div>
+            <div class="stat-footer">
+              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'مجموع رؤوس الأموال المستحقة بذمتك للممولين' : 'Total principal capital owed to funders'}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="premium-card stat-card success">
+          <div class="stat-header">
+            <span class="stat-title">${t.operatorCapital}</span>
+            <div class="stat-icon">
+              <i data-lucide="shield-check" style="color: var(--color-success);"></i>
+            </div>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" style="font-size: 1.4rem; font-family: var(--font-english);">
+              ${formatUSD(totalOperatorCapital)}
+            </div>
+            <div class="stat-footer">
+              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'مجموع رؤوس الأموال الموظفة لدى المشغلين' : 'Total principal capital deployed to operators'}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="premium-card stat-card ${capStatusClass}">
+          <div class="stat-header">
+            <span class="stat-title">${t.netCapital}</span>
+            <div class="stat-icon">
+              <i data-lucide="wallet" style="color: var(--color-${capStatusClass});"></i>
+            </div>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" style="font-size: 1.4rem; color: var(--color-${capStatusClass}); font-family: var(--font-english);">
+              ${netCapital >= 0 ? '+' : ''}${formatUSD(netCapital)}
+            </div>
+            <div class="stat-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'رأس المال الفعلي المشغل ذاتياً' : 'Net self-funded deployed capital'}</span>
+              <span class="badge ${capBadgeClass}" style="padding: 2px 8px; font-size: 0.7rem;">
+                ${netCapital >= 0 ? (isAr ? 'تمويل مغطى' : 'Self-funded') : (isAr ? 'فجوة سيولة' : 'Liquidity gap')}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Smart diagnosis box -->
+      <div style="margin-top: 15px;">
+        ${diagnosisHtml}
+      </div>
+    </div>
+  `;
+}
 function renderAccountStatement(accountId) {
   const t = translations[state.activeLanguage];
   const panel = document.getElementById('ledger-statement-panel');
