@@ -1283,15 +1283,33 @@ function loadState() {
     try {
       state = JSON.parse(saved);
       
-      // Auto-migrate to the new 2026 contracts if old contracts are detected in state OR if contracts list is empty
+      // Auto-migrate to the new 2026 contracts if old 2024 contracts are detected in state OR if contracts list is empty
       const hasOld2024 = state.contracts && state.contracts.some(c => c.startDate === '2024-01-01');
-      const hasOldDebtors = state.contracts && state.contracts.some(c => c.partyName === 'شركة جبال الفاو للمقاولات' || c.partyName === 'المشغل التجريبي (مجموعة بابل)');
-      
-      if (!state.contracts || state.contracts.length === 0 || hasOld2024 || hasOldDebtors) {
-        console.log("Empty or old contracts detected, auto-resetting to new 2026 defaults");
+      if (!state.contracts || state.contracts.length === 0 || hasOld2024) {
+        console.log("Empty or old 2024 contracts detected, auto-resetting to new 2026 defaults");
         state.contracts = [...defaultContracts];
         state.transactions = [];
         saveState();
+      } else {
+        // Smart migration for debtors: replace old default operators with Asia Cell operators without wiping user custom contracts
+        const hasOldDebtors = state.contracts.some(c => c.partyName === 'شركة جبال الفاو للمقاولات' || c.partyName === 'المشغل التجريبي (مجموعة بابل)');
+        if (hasOldDebtors) {
+          console.log("Migrating default operators to Asia Cell, preserving user custom contracts...");
+          // 1. Remove old default operators
+          state.contracts = state.contracts.filter(c => c.partyName !== 'شركة جبال الفاو للمقاولات' && c.partyName !== 'المشغل التجريبي (مجموعة بابل)');
+          
+          // 2. Add the 5 Asia Cell contracts from defaultContracts if they don't exist
+          defaultContracts.forEach(dc => {
+            if (dc.type === 'debtor' && !state.contracts.some(c => c.partyName === dc.partyName)) {
+              state.contracts.push(dc);
+            }
+          });
+          
+          // 3. Remove transactions associated with the deleted old operators
+          state.transactions = state.transactions.filter(tx => tx.contractId !== 'cnt_d_001' && tx.contractId !== 'cnt_d_user');
+          
+          saveState();
+        }
       }
 
       // Ensure transactions array exists
