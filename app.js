@@ -401,35 +401,88 @@ const defaultContracts = [
   // --- EXISTING DEBTOR (OPERATOR) CONTRACTS ---
   {
     id: "cnt_d_001",
-    partyName: "شركة جبال الفاو للمقاولات",
+    partyName: "اسيا سيل 1",
     type: "debtor",
-    principal: 80000,
-    principalCurrency: "USD",
-    returnCurrency: "IQD",
-    dividendType: "rate",
-    dividendRate: 12.0,
-    monthlyDividendAmount: 0,
+    principal: 88950000,
+    principalCurrency: "IQD",
+    returnCurrency: "USD",
+    dividendType: "fixed",
+    dividendRate: 0,
+    monthlyDividendAmount: 2400,
     customExchangeRate: 1450.0,
     duration: 24,
     startDate: "2026-01-01",
     status: "active",
-    isInternal: true
+    isInternal: true,
+    notes: "جدول التسديد: كل 3 اشهر"
   },
   {
-    id: "cnt_d_user",
-    partyName: "المشغل التجريبي (مجموعة بابل)",
+    id: "cnt_d_002",
+    partyName: "اسيا سيل 2",
     type: "debtor",
-    principal: 10000,
+    principal: 40000,
     principalCurrency: "USD",
     returnCurrency: "IQD",
     dividendType: "fixed",
     dividendRate: 0,
-    monthlyDividendAmount: 600000,
+    monthlyDividendAmount: 2400000,
     customExchangeRate: 1450.0,
     duration: 24,
     startDate: "2026-01-01",
     status: "active",
-    isInternal: true
+    isInternal: true,
+    notes: "جدول التسديد: كل 3 اشهر"
+  },
+  {
+    id: "cnt_d_003",
+    partyName: "اسيا سيل 3",
+    type: "debtor",
+    principal: 70450000,
+    principalCurrency: "IQD",
+    returnCurrency: "USD",
+    dividendType: "fixed",
+    dividendRate: 0,
+    monthlyDividendAmount: 2000,
+    customExchangeRate: 1450.0,
+    duration: 24,
+    startDate: "2026-01-01",
+    status: "active",
+    isInternal: true,
+    notes: "جدول التسديد: كل 3 اشهر"
+  },
+  {
+    id: "cnt_d_004",
+    partyName: "اسيا سيل 4",
+    type: "debtor",
+    principal: 20000,
+    principalCurrency: "USD",
+    returnCurrency: "IQD",
+    dividendType: "fixed",
+    dividendRate: 0,
+    monthlyDividendAmount: 1200000,
+    customExchangeRate: 1450.0,
+    duration: 24,
+    startDate: "2026-01-01",
+    status: "active",
+    isInternal: true,
+    notes: "جدول التسديد: كل 6 اشهر"
+  },
+  {
+    id: "cnt_d_005",
+    partyName: "اسيا سيل 5",
+    type: "debtor",
+    principal: 50000,
+    principalCurrency: "USD",
+    returnCurrency: "IQD",
+    dividendType: "fixed",
+    dividendRate: 0,
+    monthlyDividendAmount: 3000000,
+    customExchangeRate: 1450.0,
+    duration: 6,
+    startDate: "2026-01-01",
+    status: "active",
+    isInternal: true,
+    notes: "جدول التسديد: كل 6 اشهر"
   }
 ];
 
@@ -1230,9 +1283,12 @@ function loadState() {
     try {
       state = JSON.parse(saved);
       
-      // Auto-migrate to the new 2026 contracts if old 2024 contracts are detected in state OR if contracts list is empty
-      if (!state.contracts || state.contracts.length === 0 || state.contracts.some(c => c.startDate === '2024-01-01')) {
-        console.log("Empty or old 2024 contracts detected, auto-resetting to new 2026 defaults");
+      // Auto-migrate to the new 2026 contracts if old contracts are detected in state OR if contracts list is empty
+      const hasOld2024 = state.contracts && state.contracts.some(c => c.startDate === '2024-01-01');
+      const hasOldDebtors = state.contracts && state.contracts.some(c => c.partyName === 'شركة جبال الفاو للمقاولات' || c.partyName === 'المشغل التجريبي (مجموعة بابل)');
+      
+      if (!state.contracts || state.contracts.length === 0 || hasOld2024 || hasOldDebtors) {
+        console.log("Empty or old contracts detected, auto-resetting to new 2026 defaults");
         state.contracts = [...defaultContracts];
         state.transactions = [];
         saveState();
