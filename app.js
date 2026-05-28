@@ -229,6 +229,8 @@ const translations = {
     noContracts: "لا توجد عقود مسجلة حالياً.",
     resetData: "تصفير وإفراغ كافة البيانات",
     confirmReset: "هل أنت متأكد من رغبتك في حذف كافة عقود الممولين والمشغلين وتصفير المنصة بالكامل؟ (لا يمكن التراجع)",
+    promptPin: "الرجاء إدخال الرمز السري لتأكيد عملية التصفير:",
+    incorrectPin: "الرمز السري غير صحيح! تم إلغاء العملية.",
     exportData: "تصدير نسخة احتياطية",
     importData: "استيراد نسخة احتياطية",
     exportDataTooltip: "تنزيل نسخة احتياطية من البيانات بصيغة JSON",
@@ -342,6 +344,8 @@ const translations = {
     noContracts: "No contracts recorded yet.",
     resetData: "Reset and Clear All Data",
     confirmReset: "Are you sure you want to delete all contracts (funders & operators) and completely reset the platform? (This cannot be undone)",
+    promptPin: "Please enter the PIN code to confirm reset:",
+    incorrectPin: "Incorrect PIN code! Action cancelled.",
     exportData: "Export Backup",
     importData: "Import Backup",
     exportDataTooltip: "Download a backup of your data as JSON",
@@ -589,6 +593,7 @@ const defaultContracts = [
     startDate: "2026-01-01",
     status: "active",
     isInternal: true,
+    paymentMonths: [3, 6, 9, 12],
     notes: "جدول التسديد: كل 3 اشهر"
   },
   {
@@ -606,6 +611,7 @@ const defaultContracts = [
     startDate: "2026-01-01",
     status: "active",
     isInternal: true,
+    paymentMonths: [3, 6, 9, 12],
     notes: "جدول التسديد: كل 3 اشهر"
   },
   {
@@ -623,6 +629,7 @@ const defaultContracts = [
     startDate: "2026-01-01",
     status: "active",
     isInternal: true,
+    paymentMonths: [3, 6, 9, 12],
     notes: "جدول التسديد: كل 3 اشهر"
   },
   {
@@ -640,6 +647,7 @@ const defaultContracts = [
     startDate: "2026-01-01",
     status: "active",
     isInternal: true,
+    paymentMonths: [6, 12],
     notes: "جدول التسديد: كل 6 اشهر"
   },
   {
@@ -657,6 +665,7 @@ const defaultContracts = [
     startDate: "2026-01-01",
     status: "active",
     isInternal: true,
+    paymentMonths: [6, 12],
     notes: "جدول التسديد: كل 6 اشهر"
   }
 ];
@@ -691,11 +700,10 @@ function convertContractCurrency(amount, from, to, contract) {
   
   if (contract && contract.customExchangeRate && contract.customExchangeRate > 0) {
     const tempRates = { ...state.exchangeRates };
-    if (contract.returnCurrency === 'IQD' || contract.principalCurrency === 'IQD') {
-      tempRates['IQD'] = contract.customExchangeRate;
+    const nonUsdCurrency = (contract.principalCurrency !== 'USD') ? contract.principalCurrency : contract.returnCurrency;
+    if (nonUsdCurrency !== 'USD') {
+      tempRates[nonUsdCurrency] = contract.customExchangeRate;
       tempRates['USD'] = 1.0;
-    } else {
-      tempRates[contract.returnCurrency] = contract.customExchangeRate;
     }
     
     const rateFrom = tempRates[from] || 1.0;
@@ -704,6 +712,48 @@ function convertContractCurrency(amount, from, to, contract) {
   }
   
   return convertCurrency(amount, from, to);
+}
+
+// --- CUSTOM MONTH PAYMENT SCHEDULING HELPERS ---
+function getMonthLabel(m, lang) {
+  const months = {
+    ar: ['', 'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'],
+    en: ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  };
+  return months[lang][m] || m;
+}
+
+function getScheduledPaymentDate(tx, contract) {
+  const txDate = new Date(tx.date);
+  const dueYear = txDate.getFullYear();
+  const dueMonth = txDate.getMonth() + 1; // 1-indexed calendar month (1 to 12)
+  
+  // Find the first payment month that is >= dueMonth
+  let targetMonth = contract.paymentMonths.find(m => m >= dueMonth);
+  let targetYear = dueYear;
+  
+  if (targetMonth === undefined) {
+    // If no month is >= dueMonth, the next payment month is in the next year
+    targetMonth = contract.paymentMonths[0];
+    targetYear = dueYear + 1;
+  }
+  
+  // Clamp the day of the month to prevent out-of-bounds dates
+  const dueDay = txDate.getDate();
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth, 0).getDate();
+  const clampedDay = Math.min(dueDay, lastDayOfTargetMonth);
+  
+  return new Date(targetYear, targetMonth - 1, clampedDay);
+}
+
+function isDueForCollection(tx, contract) {
+  if (!contract || contract.type !== 'debtor' || !contract.paymentMonths || contract.paymentMonths.length === 0) {
+    return true; // No restriction
+  }
+  
+  const today = new Date();
+  const scheduledDate = getScheduledPaymentDate(tx, contract);
+  return today >= scheduledDate;
 }
 
 // --- ARABIC AND ENGLISH TAFQEET (NUMBERS TO WORDS) ALGORITHMS ---
@@ -1438,7 +1488,7 @@ function returnContractCapital(contractId) {
       partyName: contract.partyName,
       partyType: contract.type,
       date: new Date().toISOString().split('T')[0],
-      type: isFunder ? 'payout' : 'collect',
+      type: 'withdrawal',
       period: contract.duration, // Final period/limit
       amount: returnAmount,
       currency: contract.returnCurrency,
@@ -1760,7 +1810,12 @@ function getUnpaidOperatorDues() {
                  settled.period === tx.period && 
                  settled.type === 'collect'
     );
-    return !isSettled;
+    if (isSettled) return false;
+    
+    const contract = state.contracts.find(c => c.id === tx.contractId);
+    if (contract && !isDueForCollection(tx, contract)) return false;
+    
+    return true;
   });
 }
 
@@ -2232,6 +2287,41 @@ function renderContractsHTML(contractType) {
               </div>
             </div>
 
+            <!-- Payment Receipt Months Selection (Debtors/Operators only) -->
+            ${!isCreditor ? `
+            <div class="form-group" id="form-payment-months-group" style="margin-bottom: 5px;">
+              <label style="font-weight: 700; margin-bottom: 8px; display: block; color: var(--color-gold);">
+                ${state.activeLanguage === 'ar' ? 'أشهر استلام الدفعات المقررة بالعقد' : 'Contract Scheduled Payment Months'}
+              </label>
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; background: rgba(0, 0, 0, 0.15); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                ${[
+                  { val: 1, ar: 'كانون الثاني (1)', en: 'Jan (1)' },
+                  { val: 2, ar: 'شباط (2)', en: 'Feb (2)' },
+                  { val: 3, ar: 'آذار (3)', en: 'Mar (3)' },
+                  { val: 4, ar: 'نيسان (4)', en: 'Apr (4)' },
+                  { val: 5, ar: 'أيار (5)', en: 'May (5)' },
+                  { val: 6, ar: 'حزيران (6)', en: 'Jun (6)' },
+                  { val: 7, ar: 'تموز (7)', en: 'Jul (7)' },
+                  { val: 8, ar: 'آب (8)', en: 'Aug (8)' },
+                  { val: 9, ar: 'أيلول (9)', en: 'Sep (9)' },
+                  { val: 10, ar: 'تشرين الأول (10)', en: 'Oct (10)' },
+                  { val: 11, ar: 'تشرين الثاني (11)', en: 'Nov (11)' },
+                  { val: 12, ar: 'كانون الأول (12)', en: 'Dec (12)' }
+                ].map(m => {
+                  const isChecked = isEditing && editingContract.paymentMonths ? editingContract.paymentMonths.includes(m.val) : true;
+                  return `
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <input type="checkbox" class="form-payment-month-cb" value="${m.val}" id="cb-pm-${m.val}" style="width: 16px; height: 16px; accent-color: var(--color-gold);" ${isChecked ? 'checked' : ''}>
+                      <label for="cb-pm-${m.val}" style="margin: 0; font-size: 0.8rem; cursor: pointer; font-weight: normal; color: var(--text-primary);">
+                        ${state.activeLanguage === 'ar' ? m.ar : m.en}
+                      </label>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+            ` : ''}
+
             <!-- Notes Field -->
             <div class="form-group">
               <label for="form-notes">${state.activeLanguage === 'ar' ? 'ملاحظات العقد' : 'Contract Notes'}</label>
@@ -2332,7 +2422,20 @@ function renderContractsHTML(contractType) {
                   const isCompleted = c.status === 'completed';
                   return `
                     <tr style="${isCompleted ? 'opacity: 0.65;' : ''}">
-                      <td style="font-weight: 700; color: var(--text-primary);">${c.partyName}</td>
+                      <td style="font-weight: 700; color: var(--text-primary);">
+                        <div>${c.partyName}</div>
+                        ${!isCreditor && c.paymentMonths ? `
+                          <div style="font-size: 0.72rem; color: var(--text-secondary); font-weight: normal; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="calendar" style="width: 12px; height: 12px; opacity: 0.85;"></i>
+                            <span>
+                              ${state.activeLanguage === 'ar' ? 'الدفعات: ' : 'Payments: '}
+                              ${c.paymentMonths.length === 12 
+                                ? (state.activeLanguage === 'ar' ? 'شهري' : 'Monthly') 
+                                : c.paymentMonths.map(m => getMonthLabel(m, state.activeLanguage)).join(state.activeLanguage === 'ar' ? '، ' : ', ')}
+                            </span>
+                          </div>
+                        ` : ''}
+                      </td>
                       <td>
                         <span style="font-family: var(--font-english); font-weight: bold;">
                           ${c.principal.toLocaleString()}
@@ -3998,7 +4101,9 @@ function renderAccountStatement(accountId) {
                    settled.period === t.period && 
                    (settled.type === 'payout' || settled.type === 'collect')
       );
-      return !isSettled;
+      if (isSettled) return false;
+      if (cnt.type === 'debtor' && !isDueForCollection(t, cnt)) return false;
+      return true;
     });
   } else if (contract) {
     unpaidDues = state.transactions.filter(t => {
@@ -4009,7 +4114,9 @@ function renderAccountStatement(accountId) {
                    settled.period === t.period && 
                    (settled.type === 'payout' || settled.type === 'collect')
       );
-      return !isSettled;
+      if (isSettled) return false;
+      if (contract.type === 'debtor' && !isDueForCollection(t, contract)) return false;
+      return true;
     });
   }
   
@@ -4088,9 +4195,13 @@ function renderAccountStatement(accountId) {
   const runningBalances = { ...openingBalances };
   
   periodTxList.forEach(tx => {
-    if (tx.type === 'deposit' || tx.type === 'withdrawal') {
+    if (tx.type === 'deposit') {
       principalTotals[tx.currency] = (principalTotals[tx.currency] || 0) + tx.amount;
       totalPrincipal += tx.amount;
+      principalCurrency = tx.currency;
+    } else if (tx.type === 'withdrawal') {
+      principalTotals[tx.currency] = (principalTotals[tx.currency] || 0) - tx.amount;
+      totalPrincipal -= tx.amount;
       principalCurrency = tx.currency;
     } else if (tx.type === 'dividend_due' || tx.type === 'profit_posted') {
       crTotals[tx.currency] = (crTotals[tx.currency] || 0) + tx.amount;
@@ -4409,6 +4520,16 @@ function renderAccountStatement(accountId) {
       e.stopPropagation();
       const txId = btn.getAttribute('data-id');
       if (confirm(state.activeLanguage === 'ar' ? 'هل تريد التراجع عن هذه الحركة المالية وحذفها؟' : 'Are you sure you want to delete and undo this transaction?')) {
+        // If undoing a capital return transaction, reactivate the contract
+        if (txId.startsWith('tx_cap_ret')) {
+          const tx = state.transactions.find(t => t.id === txId);
+          if (tx) {
+            const contract = state.contracts.find(c => c.id === tx.contractId);
+            if (contract) {
+              contract.status = 'active';
+            }
+          }
+        }
         state.transactions = state.transactions.filter(t => t.id !== txId);
         saveState();
         renderApp();
@@ -4432,6 +4553,13 @@ function renderAccountStatement(accountId) {
           ? `هل تريد التراجع عن الحركة الأخيرة: "${lastTx.description}" بقيمة ${lastTx.amount.toLocaleString()}؟`
           : `Do you want to undo the last action: "${lastTx.description}" for amount ${lastTx.amount.toLocaleString()}?`;
         if (confirm(confirmMsg)) {
+          // If undoing a capital return transaction, reactivate the contract
+          if (lastTx.id.startsWith('tx_cap_ret')) {
+            const contract = state.contracts.find(c => c.id === lastTx.contractId);
+            if (contract) {
+              contract.status = 'active';
+            }
+          }
           state.transactions = state.transactions.filter(t => t.id !== lastTx.id);
           saveState();
           renderApp();
@@ -4787,11 +4915,16 @@ function setupEventListeners() {
     resetBtn.addEventListener('click', () => {
       const t = translations[state.activeLanguage];
       if (confirm(t.confirmReset)) {
-        state.contracts = [...defaultContracts];
-        state.transactions = [];
-        initMockTransactions();
-        saveState();
-        renderApp();
+        const pin = prompt(t.promptPin);
+        if (pin === '0000') {
+          state.contracts = [...defaultContracts];
+          state.transactions = [];
+          initMockTransactions();
+          saveState();
+          renderApp();
+        } else if (pin !== null) {
+          alert(t.incorrectPin);
+        }
       }
     });
   }
@@ -4965,6 +5098,17 @@ function setupEventListeners() {
       
       const isInternal = document.getElementById('form-is-internal') ? document.getElementById('form-is-internal').checked : false;
       
+      let paymentMonths = null;
+      if (type === 'debtor') {
+        paymentMonths = [];
+        document.querySelectorAll('.form-payment-month-cb:checked').forEach(cb => {
+          paymentMonths.push(parseInt(cb.value));
+        });
+        if (paymentMonths.length === 0) {
+          paymentMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        }
+      }
+      
       if (principalCurrency === returnCurrency) {
         checkShariaWarning();
         const shakeTarget = errorBox.querySelector('.sharia-warning-box');
@@ -4990,6 +5134,9 @@ function setupEventListeners() {
           contract.startDate = startDate;
           contract.notes = notes;
           contract.isInternal = type === 'creditor' ? isInternal : true;
+          if (type === 'debtor') {
+            contract.paymentMonths = paymentMonths;
+          }
           
           // Update the initial deposit transaction
           const initTx = state.transactions.find(tx => tx.contractId === contract.id && tx.type === 'deposit');
@@ -5036,7 +5183,8 @@ function setupEventListeners() {
           startDate,
           notes,
           status: "active",
-          isInternal: type === 'creditor' ? isInternal : true
+          isInternal: type === 'creditor' ? isInternal : true,
+          paymentMonths: type === 'debtor' ? paymentMonths : null
         };
         
         state.contracts.push(newContract);

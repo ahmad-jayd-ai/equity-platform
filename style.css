@@ -1590,3 +1590,161 @@ body.theme-beige .currency-bar-track {
 .currency-bar-rec strong {
   color: var(--text-primary);
 }
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVENESS OVERHAUL
+   ========================================================================== */
+
+/* Tablet & Mobile tweaks for the sidebar footer actions in compact view (70px wide) */
+@media (min-width: 577px) and (max-width: 768px) {
+  .backup-actions {
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+  .backup-actions button span,
+  .btn-reset-db span {
+    display: none !important;
+  }
+  .backup-actions button,
+  .btn-reset-db {
+    padding: 8px 0 !important;
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}
+
+/* Mobile Screens (576px and below) */
+@media (max-width: 576px) {
+  /* Sidebar to Bottom Navigation transition */
+  .sidebar {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    width: 100% !important;
+    height: 60px !important;
+    flex-direction: row !important;
+    border-inline-end: none !important;
+    border-top: 1px solid var(--border-color) !important;
+    padding: 0 10px !important;
+    justify-content: space-around !important;
+    z-index: 1001 !important;
+    background: var(--bg-secondary) !important;
+    box-shadow: 0 -2px 15px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  .logo-section,
+  .sidebar-footer {
+    display: none !important;
+  }
+
+  .nav-links {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    justify-content: space-around !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    height: 100% !important;
+    align-items: center !important;
+  }
+
+  .nav-item {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 1 !important;
+  }
+
+  .nav-link {
+    flex-direction: column !important;
+    gap: 4px !important;
+    padding: 8px 4px !important;
+    justify-content: center !important;
+    font-size: 0.7rem !important;
+    width: 100% !important;
+    text-align: center !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    border: none !important;
+  }
+
+  .nav-text {
+    display: none !important;
+  }
+
+  /* Main Content adjustment to prevent bottom nav collision */
+  html[dir="rtl"] .main-content {
+    margin-right: 0 !important;
+  }
+  html[dir="ltr"] .main-content {
+    margin-left: 0 !important;
+  }
+  .main-content {
+    padding: 1rem 1rem 80px 1rem !important;
+  }
+
+  /* Header structure on mobile */
+  .content-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding-bottom: 1rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .header-actions {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+  }
+
+  /* Hide redundant date indicator (since Rolex clock cyclops lens shows it premiumly) */
+  .header-actions > div:last-child {
+    display: none !important;
+  }
+
+  /* Form modal and Printable contract modal sizing tweaks */
+  .print-contract-modal {
+    padding: 1.2rem !important;
+    width: 95% !important;
+    max-height: 85vh !important;
+    gap: 15px !important;
+  }
+
+  .contract-paper {
+    padding: 1.5rem !important;
+    line-height: 1.65 !important;
+  }
+
+  .contract-title {
+    font-size: 1.25rem !important;
+    margin-bottom: 1.2rem !important;
+    padding-bottom: 8px !important;
+  }
+
+  /* Currency Balance & Analytics Ratio Cards */
+  .currency-ratio-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
+  }
+
+  /* Ensure tables scroll smoothly and scroll indicator is visible */
+  .table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+  }
+
+  .premium-table th, 
+  .premium-table td {
+    white-space: nowrap !important;
+    padding: 10px 12px !important;
+    font-size: 0.82rem !important;
+  }
+}
