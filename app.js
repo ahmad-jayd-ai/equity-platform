@@ -245,6 +245,12 @@ let state = {
   transactions: [] // Ledger transaction logs
 };
 
+let statementDateFilters = {
+  accountId: '',
+  startDate: '',
+  endDate: ''
+};
+
 // --- MOCK MUDARABAH DATA ---
 const defaultContracts = [
   // --- REAL FUNDER CONTRACTS (CREDITORS) ---
@@ -1149,57 +1155,62 @@ function postMonthlyArbitrageSpreads() {
 
 // Manual mock setup to load historical transaction ledger balances
 function initMockTransactions() {
-  if (state.transactions && state.transactions.length > 0) return;
+  if (!state.transactions) state.transactions = [];
   
-  state.transactions = [];
-  
-  // Create deposit/withdrawal transactions for each contract
+  // Create deposit/withdrawal transactions for each contract if not already present
+  let addedNew = false;
   state.contracts.forEach(c => {
     if (!c.startDate || isNaN(Date.parse(c.startDate))) {
       console.warn(`Skipping transaction init for contract ${c.id} due to invalid start date.`);
       return;
     }
-    const isCreditor = c.type === 'creditor';
-    state.transactions.push({
-      id: `tx_init_${c.id.slice(-4)}`,
-      contractId: c.id,
-      partyName: c.partyName,
-      partyType: c.type,
-      date: c.startDate,
-      type: 'deposit',
-      amount: c.principal,
-      currency: c.principalCurrency,
-      description: isCreditor 
-        ? (state.activeLanguage === 'ar' ? 'إيداع رأس مال المضاربة' : 'Capital Principal Deposit')
-        : (state.activeLanguage === 'ar' ? 'استلام رأس مال للتشغيل' : 'Capital Principal Withdrawal')
-    });
+    const hasInitTx = state.transactions.some(t => t.contractId === c.id && t.type === 'deposit');
+    if (!hasInitTx) {
+      const isCreditor = c.type === 'creditor';
+      state.transactions.push({
+        id: `tx_init_${c.id.slice(-4)}`,
+        contractId: c.id,
+        partyName: c.partyName,
+        partyType: c.type,
+        date: c.startDate,
+        type: 'deposit',
+        amount: c.principal,
+        currency: c.principalCurrency,
+        description: isCreditor 
+          ? (state.activeLanguage === 'ar' ? 'إيداع رأس مال المضاربة' : 'Capital Principal Deposit')
+          : (state.activeLanguage === 'ar' ? 'استلام رأس مال للتشغيل' : 'Capital Principal Withdrawal')
+      });
+      addedNew = true;
+    }
   });
   
   // Generate dues based on history
   generateDues();
   
-  // Pre-settle Month 1 (Feb) and Month 2 (Mar) to show active ledger records
-  state.transactions.forEach(t => {
-    if (t.type === 'dividend_due' && (t.date.includes('-02-') || t.date.includes('-03-'))) {
-      const isFunder = t.partyType === 'creditor';
-      
-      // Add payout/collect record
-      state.transactions.push({
-        id: `tx_settle_${t.id.slice(-6)}`,
-        contractId: t.contractId,
-        partyName: t.partyName,
-        partyType: t.partyType,
-        date: t.date,
-        type: isFunder ? 'payout' : 'collect',
-        period: t.period,
-        amount: t.amount,
-        currency: t.currency,
-        description: isFunder
-          ? (state.activeLanguage === 'ar' ? `تسديد أرباح شهر ${t.period} للممول` : `Dividend Payout Month ${t.period}`)
-          : (state.activeLanguage === 'ar' ? `تحصيل أرباح شهر ${t.period} من المشغل` : `Collected Dividend Month ${t.period}`)
-      });
-    }
-  });
+  // Pre-settle Month 1 (Feb) and Month 2 (Mar) to show active ledger records only for brand new setup
+  const isBrandNew = state.transactions.filter(t => t.type === 'deposit').length === state.contracts.length && addedNew && state.transactions.length <= state.contracts.length;
+  if (isBrandNew) {
+    state.transactions.forEach(t => {
+      if (t.type === 'dividend_due' && (t.date.includes('-02-') || t.date.includes('-03-'))) {
+        const isFunder = t.partyType === 'creditor';
+        
+        state.transactions.push({
+          id: `tx_settle_${t.id.slice(-6)}`,
+          contractId: t.contractId,
+          partyName: t.partyName,
+          partyType: t.partyType,
+          date: t.date,
+          type: isFunder ? 'payout' : 'collect',
+          period: t.period,
+          amount: t.amount,
+          currency: t.currency,
+          description: isFunder
+            ? (state.activeLanguage === 'ar' ? `تسديد أرباح شهر ${t.period} للممول` : `Dividend Payout Month ${t.period}`)
+            : (state.activeLanguage === 'ar' ? `تحصيل أرباح شهر ${t.period} من المشغل` : `Collected Dividend Month ${t.period}`)
+        });
+      }
+    });
+  }
   
   saveState();
 }
@@ -1291,9 +1302,11 @@ function loadState() {
         state.transactions = [];
         saveState();
       } else {
-        // Smart migration for debtors: replace old default operators with Asia Cell operators without wiping user custom contracts
+        // Smart migration for debtors: replace old default operators or populate if empty, without wiping user custom contracts
         const hasOldDebtors = state.contracts.some(c => c.partyName === 'شركة جبال الفاو للمقاولات' || c.partyName === 'المشغل التجريبي (مجموعة بابل)');
-        if (hasOldDebtors) {
+        const hasNoDebtors = !state.contracts.some(c => c.type === 'debtor');
+        
+        if (hasOldDebtors || hasNoDebtors) {
           console.log("Migrating default operators to Asia Cell, preserving user custom contracts...");
           // 1. Remove old default operators
           state.contracts = state.contracts.filter(c => c.partyName !== 'شركة جبال الفاو للمقاولات' && c.partyName !== 'المشغل التجريبي (مجموعة بابل)');
@@ -2230,19 +2243,22 @@ function renderLedgersHTML() {
   const balances = getConsolidatedBalances();
   const contractBalances = getAccountBalances();
   
-  // Find outstanding unpaid due transactions
-  const unpaidDues = state.transactions.filter(t => {
-    if (t.type !== 'dividend_due') return false;
-    
-    // Check if there is a matching payout or collect transaction for this contract & period
-    const isSettled = state.transactions.some(
-      settled => settled.contractId === t.contractId && 
-                 settled.period === t.period && 
-                 (settled.type === 'payout' || settled.type === 'collect')
-    );
-    return !isSettled;
+  // Calculate Funder (Creditor) Totals
+  const creditorTotals = { principals: {}, dues: {}, balances: {} };
+  balances.creditors.forEach(cb => {
+    Object.keys(cb.principals).forEach(curr => { creditorTotals.principals[curr] = (creditorTotals.principals[curr] || 0) + cb.principals[curr]; });
+    Object.keys(cb.dues).forEach(curr => { creditorTotals.dues[curr] = (creditorTotals.dues[curr] || 0) + cb.dues[curr]; });
+    Object.keys(cb.balances).forEach(curr => { creditorTotals.balances[curr] = (creditorTotals.balances[curr] || 0) + cb.balances[curr]; });
   });
-  
+
+  // Calculate Operator (Debtor) Totals
+  const debtorTotals = { principals: {}, dues: {}, balances: {} };
+  balances.debtors.forEach(db => {
+    Object.keys(db.principals).forEach(curr => { debtorTotals.principals[curr] = (debtorTotals.principals[curr] || 0) + db.principals[curr]; });
+    Object.keys(db.dues).forEach(curr => { debtorTotals.dues[curr] = (debtorTotals.dues[curr] || 0) + db.dues[curr]; });
+    Object.keys(db.balances).forEach(curr => { debtorTotals.balances[curr] = (debtorTotals.balances[curr] || 0) + db.balances[curr]; });
+  });
+
   return `
     <!-- Account Balances Row -->
     <div class="dashboard-grid">
@@ -2327,21 +2343,21 @@ function renderLedgersHTML() {
     </div>
     
     <!-- Unified Accounts Lists and Transactions Details -->
-    <div class="dashboard-details-grid">
-      <!-- Accounts Ledgers Table -->
+    <div style="display: flex; flex-direction: column; gap: 25px; margin-bottom: 30px;">
+      
+      <div class="search-wrapper" style="margin-bottom: 0;">
+        <div class="search-input-icon">
+          <i data-lucide="search" style="width: 16px; height: 16px;"></i>
+        </div>
+        <input type="text" class="search-control" id="search-ledgers" placeholder="${state.activeLanguage === 'ar' ? 'بحث باسم الحساب الموحد...' : 'Search by consolidated account name...'}">
+      </div>
+
+      <!-- Funder Accounts Ledger Table -->
       <div class="premium-card">
         <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="layers" style="color: var(--color-gold)"></i>
-          أرصدة حسابات الأستاذ الموحدة للمتعاملين
+          <i data-lucide="shield-check" style="color: var(--color-gold)"></i>
+          أرصدة حسابات الأستاذ الموحدة للممولين (حسابات دائنة)
         </h3>
-        
-        <div class="search-wrapper">
-          <div class="search-input-icon">
-            <i data-lucide="search" style="width: 16px; height: 16px;"></i>
-          </div>
-          <input type="text" class="search-control" id="search-ledgers" placeholder="${state.activeLanguage === 'ar' ? 'بحث باسم الحساب الموحد...' : 'Search by consolidated account name...'}">
-        </div>
-        
         <div class="table-container">
           <table class="premium-table">
             <thead>
@@ -2355,7 +2371,6 @@ function renderLedgersHTML() {
               </tr>
             </thead>
             <tbody>
-              <!-- Creditors -->
               ${balances.creditors.map(cb => `
                 <tr>
                   <td style="font-weight: 700; color: var(--text-primary);">${cb.partyName}</td>
@@ -2377,8 +2392,39 @@ function renderLedgersHTML() {
                   </td>
                 </tr>
               `).join('')}
-              
-              <!-- Debtors -->
+            </tbody>
+            <tfoot>
+              <tr style="background-color: rgba(255, 255, 255, 0.05); font-weight: bold; border-top: 2px solid var(--border-color);">
+                <td colspan="2" style="text-align: start;">المجموع الكلي (Totals)</td>
+                <td style="font-family: var(--font-english);">${formatMultiCurrency(creditorTotals.principals)}</td>
+                <td style="font-family: var(--font-english);">${formatMultiCurrency(creditorTotals.dues)}</td>
+                <td style="font-family: var(--font-english); color: var(--color-gold);">${formatMultiCurrency(creditorTotals.balances)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Operator Accounts Ledger Table -->
+      <div class="premium-card">
+        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="shield-alert" style="color: var(--color-danger)"></i>
+          أرصدة حسابات الأستاذ الموحدة للمشغلين (حسابات مدينة)
+        </h3>
+        <div class="table-container">
+          <table class="premium-table">
+            <thead>
+              <tr>
+                <th>${t.accountName}</th>
+                <th>نوع الحساب</th>
+                <th>إجمالي رأس المال</th>
+                <th>إجمالي المستحقات</th>
+                <th>الرصيد المعلق المجمع</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
               ${balances.debtors.map(db => `
                 <tr>
                   <td style="font-weight: 700; color: var(--text-primary);">${db.partyName}</td>
@@ -2401,43 +2447,16 @@ function renderLedgersHTML() {
                 </tr>
               `).join('')}
             </tbody>
+            <tfoot>
+              <tr style="background-color: rgba(255, 255, 255, 0.05); font-weight: bold; border-top: 2px solid var(--border-color);">
+                <td colspan="2" style="text-align: start;">المجموع الكلي (Totals)</td>
+                <td style="font-family: var(--font-english);">${formatMultiCurrency(debtorTotals.principals)}</td>
+                <td style="font-family: var(--font-english);">${formatMultiCurrency(debtorTotals.dues)}</td>
+                <td style="font-family: var(--font-english); color: var(--color-danger);">${formatMultiCurrency(debtorTotals.balances)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
-        </div>
-      </div>
-      
-      <!-- Outstanding Dues Posting Engine -->
-      <div class="premium-card" style="display: flex; flex-direction: column;">
-        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="clipboard-list" style="color: var(--color-gold)"></i>
-          ${t.outstandingDues}
-        </h3>
-        
-        <div style="flex: 1; overflow-y: auto; max-height: 300px; display: flex; flex-direction: column; gap: 12px;">
-          ${unpaidDues.length === 0 ? `
-            <div style="text-align: center; color: var(--text-muted); padding: 40px;">
-              <i data-lucide="check-circle" style="width: 36px; height: 36px; color: var(--color-success); margin-bottom: 10px;"></i>
-              <p>${t.noDues}</p>
-            </div>
-          ` : unpaidDues.map(d => {
-            const isFunder = d.partyType === 'creditor';
-            return `
-              <div style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <div style="font-weight: 800; font-size: 0.85rem;">${d.partyName}</div>
-                  <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-english); margin-top: 2px;">
-                    الشهر ${d.period} - تاريخ الاستحقاق: ${d.date}
-                  </div>
-                  <div style="font-family: var(--font-english); font-weight: 700; margin-top: 4px; color: ${isFunder ? 'var(--color-gold)' : 'var(--color-success)'}">
-                    ${d.amount.toLocaleString()} ${d.currency}
-                  </div>
-                </div>
-                <button class="btn btn-primary btn-settle-due" data-id="${d.id}" style="padding: 6px 12px; font-size: 0.8rem;">
-                  <i data-lucide="${isFunder ? 'arrow-up-right' : 'arrow-down-left'}"></i>
-                  <span>${isFunder ? t.payBtn : t.collectBtn}</span>
-                </button>
-              </div>
-            `;
-          }).join('')}
         </div>
       </div>
     </div>
@@ -2742,127 +2761,20 @@ function renderMonthlyBalanceHTML() {
             </div>
           </div>
           <div class="stat-body">
-            <div class="stat-value" style="font-size: 1.4rem; color: var(--color-${netStatusClass}); font-family: var(--font-english);">
-              ${totalNet >= 0 ? '+' : ''}${formatVal(totalNet)}
-            </div>
-            <div class="stat-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'الصافي المالي الإجمالي التراكمي' : 'Cumulative net balance'}</span>
-              <span class="badge ${netBadgeClass}" style="padding: 2px 8px; font-size: 0.7rem;">
-                ${totalNet >= 0 ? labelProfit : labelLoss}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Table of monthly yield breakdown -->
-      <div class="premium-card" style="margin-top: 15px;">
-        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-          <span>${labelCurrencyUnification}</span>
-          <span>${isAr ? `إجمالي الفحوصات: ${monthlyData.length} شهور` : `Total periods: ${monthlyData.length} months`}</span>
-        </div>
-        <div class="table-container">
-          <table class="premium-table">
-            <thead>
-              <tr>
-                <th>${labelMonth}</th>
-                <th>${labelFunderDues}</th>
-                <th>${labelOperatorDues}</th>
-                <th>${labelNetProfit}</th>
-                <th>${labelStatus}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- SECTION 2: CAPITAL PRINCIPAL BALANCE -->
-    <div style="margin-top: 35px; border-top: 1px solid var(--border-color); padding-top: 25px;">
-      <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; color: var(--text-primary);">
-        <span style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="scale" style="color: var(--color-gold);"></i>
-          ${t.capitalBalance}
-        </span>
-        <span style="font-size: 0.75rem; color: var(--text-secondary); background: rgba(255, 255, 255, 0.03); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-          ${isAr ? 'محتسب بالدولار فقط (USD)' : 'Calculated in USD only'}
-        </span>
-      </h3>
-      
-      <div class="dashboard-grid" style="margin-bottom: 15px;">
-        <div class="premium-card stat-card danger">
-          <div class="stat-header">
-            <span class="stat-title">${t.funderCapital}</span>
-            <div class="stat-icon">
-              <i data-lucide="shield-alert" style="color: var(--color-danger);"></i>
-            </div>
-          </div>
-          <div class="stat-body">
-            <div class="stat-value" style="font-size: 1.4rem; font-family: var(--font-english);">
-              ${formatUSD(totalFunderCapital)}
-            </div>
-            <div class="stat-footer">
-              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'مجموع رؤوس الأموال المستحقة بذمتك للممولين' : 'Total principal capital owed to funders'}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="premium-card stat-card success">
-          <div class="stat-header">
-            <span class="stat-title">${t.operatorCapital}</span>
-            <div class="stat-icon">
-              <i data-lucide="shield-check" style="color: var(--color-success);"></i>
-            </div>
-          </div>
-          <div class="stat-body">
-            <div class="stat-value" style="font-size: 1.4rem; font-family: var(--font-english);">
-              ${formatUSD(totalOperatorCapital)}
-            </div>
-            <div class="stat-footer">
-              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'مجموع رؤوس الأموال الموظفة لدى المشغلين' : 'Total principal capital deployed to operators'}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="premium-card stat-card ${capStatusClass}">
-          <div class="stat-header">
-            <span class="stat-title">${t.netCapital}</span>
-            <div class="stat-icon">
-              <i data-lucide="wallet" style="color: var(--color-${capStatusClass});"></i>
-            </div>
-          </div>
-          <div class="stat-body">
-            <div class="stat-value" style="font-size: 1.4rem; color: var(--color-${capStatusClass}); font-family: var(--font-english);">
-              ${netCapital >= 0 ? '+' : ''}${formatUSD(netCapital)}
-            </div>
-            <div class="stat-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <span style="color: var(--text-secondary); font-size: 0.75rem;">${isAr ? 'رأس المال الفعلي المشغل ذاتياً' : 'Net self-funded deployed capital'}</span>
-              <span class="badge ${capBadgeClass}" style="padding: 2px 8px; font-size: 0.7rem;">
-                ${netCapital >= 0 ? (isAr ? 'تمويل مغطى' : 'Self-funded') : (isAr ? 'فجوة سيولة' : 'Liquidity gap')}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Smart diagnosis box -->
-      <div style="margin-top: 15px;">
-        ${diagnosisHtml}
-      </div>
-    </div>
-  `;
-}
-
-// Renders the specific ledger statement table for a party/platform
+            <div class="stat-value" style="font-size: 1.4rem; color: var(--color-${netStatusClass}); font-f// Renders the specific ledger statement table for a party/platform
 function renderAccountStatement(accountId) {
   const t = translations[state.activeLanguage];
   const panel = document.getElementById('ledger-statement-panel');
   if (!panel) return;
   
   panel.style.display = 'block';
+  
+  // Reset date filters if different accountId is loaded
+  if (statementDateFilters.accountId !== accountId) {
+    statementDateFilters.accountId = accountId;
+    statementDateFilters.startDate = '';
+    statementDateFilters.endDate = '';
+  }
   
   let accountName = '';
   let txList = [];
@@ -2894,14 +2806,32 @@ function renderAccountStatement(accountId) {
   // Sort transactions by date chronologically
   txList.sort((a, b) => new Date(a.date) - new Date(b.date));
   
-  // Find unpaid dues for this statement
+  // Find unpaid dues for this statement (including creditors/funders & debtors/operators)
   let unpaidDues = [];
   if (isPartyView) {
-    unpaidDues = getUnpaidOperatorDues().filter(due => 
-      partyContracts.some(pc => pc.id === due.contractId)
-    );
+    unpaidDues = state.transactions.filter(t => {
+      if (t.type !== 'dividend_due') return false;
+      const cnt = state.contracts.find(c => c.id === t.contractId);
+      if (!cnt || cnt.partyName.trim() !== partyName.trim()) return false;
+      
+      const isSettled = state.transactions.some(
+        settled => settled.contractId === t.contractId && 
+                   settled.period === t.period && 
+                   (settled.type === 'payout' || settled.type === 'collect')
+      );
+      return !isSettled;
+    });
   } else if (contract) {
-    unpaidDues = getUnpaidOperatorDues().filter(due => due.contractId === contract.id);
+    unpaidDues = state.transactions.filter(t => {
+      if (t.type !== 'dividend_due' || t.contractId !== contract.id) return false;
+      
+      const isSettled = state.transactions.some(
+        settled => settled.contractId === t.contractId && 
+                   settled.period === t.period && 
+                   (settled.type === 'payout' || settled.type === 'collect')
+      );
+      return !isSettled;
+    });
   }
   
   let alertsHtml = '';
@@ -2912,27 +2842,28 @@ function renderAccountStatement(accountId) {
           <div class="alerts-icon">
             <i data-lucide="bell"></i>
           </div>
-          <span class="alerts-title">${state.activeLanguage === 'ar' ? 'تنبيهات دفعات معلقة مستحقة للتحصيل' : 'Pending Operator Dues Alerts'}</span>
+          <span class="alerts-title">${state.activeLanguage === 'ar' ? 'تنبيهات دفعات معلقة مستحقة للصرف / التحصيل' : 'Pending Settlement/Collection Alerts'}</span>
         </div>
         <div class="alerts-list">
           ${unpaidDues.map(due => {
+            const isFunderDue = due.partyType === 'creditor';
             return `
               <div class="alert-item">
                 <div class="alert-info">
                   <span class="alert-party" style="font-weight: 700;">${due.partyName}</span>
                   <div class="alert-details">
                     ${state.activeLanguage === 'ar' 
-                      ? `تنبيه تحصيل: الشهر ${due.period} | تاريخ الاستحقاق: ${due.date} | رقم العقد: ${due.contractId}` 
-                      : `Collection Alert: Month ${due.period} | Due Date: ${due.date} | Contract ID: ${due.contractId}`}
+                      ? `${isFunderDue ? 'تنبيه تسديد (صرف):' : 'تنبيه تحصيل:'} الشهر ${due.period} | تاريخ الاستحقاق: ${due.date} | رقم العقد: ${due.contractId}` 
+                      : `${isFunderDue ? 'Payout Alert:' : 'Collection Alert:'} Month ${due.period} | Due Date: ${due.date} | Contract ID: ${due.contractId}`}
                   </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
-                  <span class="alert-amount" style="color: var(--color-danger); font-family: var(--font-english); font-weight: 800;">
+                  <span class="alert-amount" style="color: ${isFunderDue ? 'var(--color-gold)' : 'var(--color-danger)'}; font-family: var(--font-english); font-weight: 800;">
                     ${due.amount.toLocaleString()} ${due.currency}
                   </span>
                   <button class="btn btn-primary btn-collect-alert" data-id="${due.id}" style="padding: 6px 12px; font-size: 0.8rem; border-radius: var(--radius-sm);">
-                    <i data-lucide="check" style="width: 14px; height: 14px;"></i>
-                    <span>${state.activeLanguage === 'ar' ? 'تحصيل الآن' : 'Collect Now'}</span>
+                    <i data-lucide="${isFunderDue ? 'arrow-up-right' : 'check'}" style="width: 14px; height: 14px;"></i>
+                    <span>${state.activeLanguage === 'ar' ? (isFunderDue ? 'تسديد الآن' : 'تحصيل الآن') : (isFunderDue ? 'Pay Now' : 'Collect Now')}</span>
                   </button>
                 </div>
               </div>
@@ -2943,7 +2874,31 @@ function renderAccountStatement(accountId) {
     `;
   }
 
-  const runningBalances = {};
+  // Calculate opening balance and filter txList by period
+  const startDate = statementDateFilters.startDate;
+  const endDate = statementDateFilters.endDate;
+  
+  const openingBalances = {};
+  const periodTxList = [];
+  
+  txList.forEach(tx => {
+    const isBeforeStart = startDate && tx.date < startDate;
+    const isAfterEnd = endDate && tx.date > endDate;
+    
+    if (isBeforeStart) {
+      if (tx.type === 'dividend_due' || tx.type === 'profit_posted') {
+        openingBalances[tx.currency] = (openingBalances[tx.currency] || 0) + tx.amount;
+      } else if (tx.type === 'payout' || tx.type === 'collect') {
+        openingBalances[tx.currency] = (openingBalances[tx.currency] || 0) - tx.amount;
+      }
+    } else if (!isAfterEnd) {
+      periodTxList.push(tx);
+    }
+  });
+
+  const principalTotals = {};
+  const drTotals = {};
+  const crTotals = {};
   
   let totalPrincipal = 0;
   let totalDr = 0;
@@ -2951,11 +2906,9 @@ function renderAccountStatement(accountId) {
   let principalCurrency = contract ? contract.principalCurrency : 'USD';
   let returnCurrency = contract ? contract.returnCurrency : 'IQD';
   
-  const principalTotals = {};
-  const drTotals = {};
-  const crTotals = {};
+  const runningBalances = { ...openingBalances };
   
-  txList.forEach(tx => {
+  periodTxList.forEach(tx => {
     if (tx.type === 'deposit' || tx.type === 'withdrawal') {
       principalTotals[tx.currency] = (principalTotals[tx.currency] || 0) + tx.amount;
       totalPrincipal += tx.amount;
@@ -3039,6 +2992,50 @@ function renderAccountStatement(accountId) {
     `;
   }
   
+  // Date Filters HTML
+  const dateFilterHTML = `
+    <div class="statement-filters no-print" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; background-color: rgba(255, 255, 255, 0.02); padding: 15px; border-radius: var(--radius-md); border: 1px solid var(--border-color); align-items: flex-end;">
+      <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+        <label style="margin-bottom: 6px; font-size: 0.8rem; display: block; font-weight: bold; color: var(--text-secondary);">
+          ${state.activeLanguage === 'ar' ? 'تاريخ بداية كشف الحساب' : 'Start Date'}
+        </label>
+        <input type="date" id="statement-filter-start-date" class="form-control" value="${startDate || ''}">
+      </div>
+      <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+        <label style="margin-bottom: 6px; font-size: 0.8rem; display: block; font-weight: bold; color: var(--text-secondary);">
+          ${state.activeLanguage === 'ar' ? 'تاريخ نهاية كشف الحساب' : 'End Date'}
+        </label>
+        <input type="date" id="statement-filter-end-date" class="form-control" value="${endDate || ''}">
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="btn-apply-statement-filters" class="btn btn-primary" style="padding: 10px 16px;">
+          <i data-lucide="filter" style="width: 14px; height: 14px;"></i>
+          <span>${state.activeLanguage === 'ar' ? 'تصفية' : 'Filter'}</span>
+        </button>
+        <button id="btn-clear-statement-filters" class="btn btn-secondary" style="padding: 10px 16px;">
+          <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+          <span>${state.activeLanguage === 'ar' ? 'إلغاء' : 'Reset'}</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  let openingBalanceRowHtml = '';
+  if (startDate) {
+    openingBalanceRowHtml = `
+      <tr style="background-color: rgba(255, 255, 255, 0.03); font-style: italic;">
+        <td style="font-family: var(--font-english); font-size: 0.85rem; color: var(--text-muted);">${startDate}</td>
+        <td style="font-weight: bold; color: var(--color-gold);">${state.activeLanguage === 'ar' ? 'رصيد افتتاحي منقول (سابق)' : 'Opening Balance Carried Forward'}</td>
+        <td>-</td>
+        <td>-</td>
+        <td style="font-family: var(--font-english); font-weight: bold; color: var(--color-gold);">
+          ${formatMultiCurrency(openingBalances)}
+        </td>
+        <td class="no-print"></td>
+      </tr>
+    `;
+  }
+
   panel.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
       <h3 style="font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
@@ -3060,6 +3057,7 @@ function renderAccountStatement(accountId) {
       </div>
     </div>
     
+    ${dateFilterHTML}
     ${alertsHtml}
     
     <div class="table-container">
@@ -3075,15 +3073,16 @@ function renderAccountStatement(accountId) {
           </tr>
         </thead>
         <tbody>
-          ${txList.length === 0 ? `
+          ${openingBalanceRowHtml}
+          ${periodTxList.length === 0 ? `
             <tr>
               <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">
-                ${t.noTransactions}
+                ${state.activeLanguage === 'ar' ? 'لا توجد حركات خلال الفترة المحددة' : 'No transactions within this period'}
               </td>
             </tr>
           ` : (() => {
-            const currentBalances = {};
-            return txList.map(tx => {
+            const currentBalances = { ...openingBalances };
+            return periodTxList.map(tx => {
               const isDeposit = tx.type === 'deposit' || tx.type === 'withdrawal';
               
               let dr = '-';
@@ -3108,7 +3107,7 @@ function renderAccountStatement(accountId) {
               
               let descHTML = tx.description;
               if (isPartyView) {
-                descHTML = `<span style="font-family: var(--font-english); font-size: 0.75rem; background: var(--color-gold-light); color: var(--color-gold); padding: 2px 6px; border-radius: var(--radius-sm); margin-inline-end: 8px;">عقد ${tx.contractId.slice(-4)}</span>` + tx.description;
+                descHTML = `<span style="font-family: var(--font-english); font-size: 0.75rem; background: var(--color-gold-light); color: var(--color-gold); padding: 2px 6px; border-radius: var(--radius-sm); margin-inline-start: 8px;">عقد ${tx.contractId.slice(-4)}</span>` + tx.description;
               }
               
               return `
@@ -3154,6 +3153,25 @@ function renderAccountStatement(accountId) {
   
   lucide.createIcons();
   
+  // Date Filters Listeners
+  const applyFiltersBtn = panel.querySelector('#btn-apply-statement-filters');
+  if (applyFiltersBtn) {
+    applyFiltersBtn.addEventListener('click', () => {
+      statementDateFilters.startDate = panel.querySelector('#statement-filter-start-date').value;
+      statementDateFilters.endDate = panel.querySelector('#statement-filter-end-date').value;
+      renderAccountStatement(accountId);
+    });
+  }
+  
+  const clearFiltersBtn = panel.querySelector('#btn-clear-statement-filters');
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener('click', () => {
+      statementDateFilters.startDate = '';
+      statementDateFilters.endDate = '';
+      renderAccountStatement(accountId);
+    });
+  }
+
   // Custom payout form submit listener
   const cpForm = document.getElementById('custom-payout-form');
   if (cpForm) {
